@@ -174,7 +174,6 @@ for name in glob(directory + '\*'):
     bpy.ops.import_scene.obj(filepath=name)
 
     obj = bpy.context.selected_objects[0]
-
     context.view_layer.objects.active = obj
 
 # Possibly disable specular shading
@@ -245,13 +244,28 @@ for name in glob(directory + '\*'):
 
         scene.render.filepath = render_file_path
         depth_file_output.file_slots[0].path = render_file_path + "_depth"
-        normal_file_output.file_slots[0].path = render_file_path + "_normal"
+        # normal_file_output.file_slots[0].path = render_file_path + "_normal"
         ao_file_output.file_slots[0].path = render_file_path + "_ao"
-        albedo_file_output.file_slots[0].path = render_file_path + "_albedo"
-        id_file_output.file_slots[0].path = render_file_path + "_id"
+        # albedo_file_output.file_slots[0].path = render_file_path + "_albedo"
+        # id_file_output.file_slots[0].path = render_file_path + "_id"
         print("Render layers", render_layers.outputs.keys())
 
 
         bpy.ops.render.render(write_still=True)  # render still
 
         cam_empty.rotation_euler[2] += math.radians(stepsize)
+
+## Coordonnées bounding box ##
+n=0
+p=0
+for n in range(8):
+    for p in range(3):
+        print(obj.bound_box[n][p])
+# print(obj.bound_box[0][0])
+# print(obj.bound_box[0][1])
+# print(obj.bound_box[1][0])
+# print(obj.bound_box[1][1])
+# print(obj.bound_box[2][0])
+# print(obj.bound_box[2][1])
+# print(obj.bound_box[3][0])
+# print(obj.bound_box[3][1])
