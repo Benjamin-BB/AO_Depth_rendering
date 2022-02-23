@@ -175,6 +175,13 @@ for name in glob(directory + '\*'):
 
     obj = bpy.context.selected_objects[0]
     context.view_layer.objects.active = obj
+# Translation de l'objet sur le plan (x=0, y=0)
+    s = 1
+    if args.scale !=0:
+        s = args.scale
+    w = -obj.bound_box[0][2]*s
+    obj.location.z +=w
+    print("helllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllo")
 
 # Possibly disable specular shading
     for slot in obj.material_slots:
@@ -244,10 +251,10 @@ for name in glob(directory + '\*'):
 
         scene.render.filepath = render_file_path
         depth_file_output.file_slots[0].path = render_file_path + "_depth"
-        # normal_file_output.file_slots[0].path = render_file_path + "_normal"
+        normal_file_output.file_slots[0].path = render_file_path + "_normal"
         ao_file_output.file_slots[0].path = render_file_path + "_ao"
-        # albedo_file_output.file_slots[0].path = render_file_path + "_albedo"
-        # id_file_output.file_slots[0].path = render_file_path + "_id"
+        albedo_file_output.file_slots[0].path = render_file_path + "_albedo"
+        id_file_output.file_slots[0].path = render_file_path + "_id"
         print("Render layers", render_layers.outputs.keys())
 
 
@@ -256,11 +263,12 @@ for name in glob(directory + '\*'):
         cam_empty.rotation_euler[2] += math.radians(stepsize)
 
 ## Coordonnées bounding box ##
-n=0
-p=0
-for n in range(8):
-    for p in range(3):
-        print(obj.bound_box[n][p])
+
+# n=0
+# p=0
+# for n in range(8):
+#     for p in range(3):
+#         print(obj.bound_box[n][p])
 # print(obj.bound_box[0][0])
 # print(obj.bound_box[0][1])
 # print(obj.bound_box[1][0])
