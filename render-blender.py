@@ -29,6 +29,7 @@ parser.add_argument('--resolution', type=int, default=600,
 parser.add_argument('--engine', type=str, default='BLENDER_EEVEE',
                     help='Blender internal engine for rendering. E.g. CYCLES, BLENDER_EEVEE, ...')
 
+
 argv = sys.argv[sys.argv.index("--") + 1:]
 args = parser.parse_args(argv)
 
@@ -162,13 +163,14 @@ bpy.ops.object.delete()
 # Import textured mesh
 bpy.ops.object.select_all(action='DESELECT')
 
-
 directory = args.obj
 j = 0
-for name in glob(directory + '\*'):
+for name in glob(directory + '/**/*.obj', recursive=True):
     bpy.ops.object.select_by_type(type='MESH')
 
     bpy.ops.object.delete()
+    # bpy.ops.mesh.primitive_plane_add()
+
     # print(name)
     j = j+1
     bpy.ops.import_scene.obj(filepath=name)
@@ -181,7 +183,6 @@ for name in glob(directory + '\*'):
         s = args.scale
     w = -obj.bound_box[0][2]*s
     obj.location.z +=w
-    print("helllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllo")
 
 # Possibly disable specular shading
     for slot in obj.material_slots:
