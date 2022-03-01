@@ -3,7 +3,7 @@ import bpy
 from glob import glob
 
 ## blender --background --python render_blender.py -- --output_folder /tmp path_to_model.obj ##
-
+#test
 
 parser = argparse.ArgumentParser(description='Renders given obj file by rotation a camera around it.')
 parser.add_argument('--views', type=int, default=30,
