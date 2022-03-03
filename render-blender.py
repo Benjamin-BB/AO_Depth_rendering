@@ -157,19 +157,23 @@ else:
     links.new(divide_node.outputs[0], id_file_output.inputs[0])
 
 # Delete default cube
-context.active_object.select_set(True)
-bpy.ops.object.delete()
+try:
+    context.active_object.select_set(True)
+    bpy.ops.object.delete()
+except:
+    print('No object in the scene')
 
 # Import textured mesh
 bpy.ops.object.select_all(action='DESELECT')
 
 directory = args.obj
 j = 0
+w=0
 for name in glob(directory + '/**/*.obj', recursive=True):
     bpy.ops.object.select_by_type(type='MESH')
 
     bpy.ops.object.delete()
-    # bpy.ops.mesh.primitive_plane_add()
+    bpy.ops.mesh.primitive_plane_add()
 
     # print(name)
     j = j+1
@@ -179,10 +183,10 @@ for name in glob(directory + '/**/*.obj', recursive=True):
     context.view_layer.objects.active = obj
 # Translation de l'objet sur le plan (x=0, y=0)
     s = 1
-    if args.scale !=0:
+    if args.scale !=1:
         s = args.scale
-    w = -obj.bound_box[0][2]*s
-    obj.location.z +=w
+    w = obj.bound_box[0][2]*s
+    obj.location.z = obj.location.z - w
 
 # Possibly disable specular shading
     for slot in obj.material_slots:
@@ -252,10 +256,10 @@ for name in glob(directory + '/**/*.obj', recursive=True):
 
         scene.render.filepath = render_file_path
         depth_file_output.file_slots[0].path = render_file_path + "_depth"
-        normal_file_output.file_slots[0].path = render_file_path + "_normal"
+        # normal_file_output.file_slots[0].path = render_file_path + "_normal"
         ao_file_output.file_slots[0].path = render_file_path + "_ao"
-        albedo_file_output.file_slots[0].path = render_file_path + "_albedo"
-        id_file_output.file_slots[0].path = render_file_path + "_id"
+        # albedo_file_output.file_slots[0].path = render_file_path + "_albedo"
+        # id_file_output.file_slots[0].path = render_file_path + "_id"
         print("Render layers", render_layers.outputs.keys())
 
 
@@ -265,16 +269,16 @@ for name in glob(directory + '/**/*.obj', recursive=True):
 
 ## Coordonnées bounding box ##
 
-# n=0
-# p=0
-# for n in range(8):
-#     for p in range(3):
-#         print(obj.bound_box[n][p])
-# print(obj.bound_box[0][0])
-# print(obj.bound_box[0][1])
-# print(obj.bound_box[1][0])
-# print(obj.bound_box[1][1])
-# print(obj.bound_box[2][0])
-# print(obj.bound_box[2][1])
-# print(obj.bound_box[3][0])
-# print(obj.bound_box[3][1])
+n=0
+p=0
+for n in range(8):
+    for p in range(3):
+        print(obj.bound_box[n][p])
+print(obj.bound_box[0][0])
+print(obj.bound_box[0][1])
+print(obj.bound_box[1][0])
+print(obj.bound_box[1][1])
+print(obj.bound_box[2][0])
+print(obj.bound_box[2][1])
+print(obj.bound_box[3][0])
+print(obj.bound_box[3][1])
