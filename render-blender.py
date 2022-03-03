@@ -269,16 +269,16 @@ for name in glob(directory + '/**/*.obj', recursive=True):
 
 ## Coordonnées bounding box ##
 
-n=0
-p=0
-for n in range(8):
-    for p in range(3):
-        print(obj.bound_box[n][p])
-print(obj.bound_box[0][0])
-print(obj.bound_box[0][1])
-print(obj.bound_box[1][0])
-print(obj.bound_box[1][1])
-print(obj.bound_box[2][0])
-print(obj.bound_box[2][1])
-print(obj.bound_box[3][0])
-print(obj.bound_box[3][1])
+# n=0
+# p=0
+# for n in range(8):
+#     for p in range(3):
+#         print(obj.bound_box[n][p])
+# print(obj.bound_box[0][0])
+# print(obj.bound_box[0][1])
+# print(obj.bound_box[1][0])
+# print(obj.bound_box[1][1])
+# print(obj.bound_box[2][0])
+# print(obj.bound_box[2][1])
+# print(obj.bound_box[3][0])
+# print(obj.bound_box[3][1])
