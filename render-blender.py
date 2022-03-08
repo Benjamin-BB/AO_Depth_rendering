@@ -47,7 +47,7 @@ render.resolution_y = args.resolution
 render.resolution_percentage = 100
 render.film_transparent = True
 scene.cycles.samples = 100
-
+#test commit
 scene.use_nodes = True
 scene.view_layers["ViewLayer"].use_pass_normal = True
 scene.view_layers["ViewLayer"].use_pass_diffuse_color = True
