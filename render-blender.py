@@ -168,10 +168,10 @@ bpy.ops.object.select_all(action='DESELECT')
 
 directory = args.obj
 j = 0
-w=0
 for name in glob(directory + '/**/*.obj', recursive=True):
-    bpy.ops.object.select_by_type(type='MESH')
 
+    w = 0
+    bpy.ops.object.select_by_type(type='MESH')
     bpy.ops.object.delete()
     bpy.ops.mesh.primitive_plane_add()
 
@@ -181,12 +181,12 @@ for name in glob(directory + '/**/*.obj', recursive=True):
 
     obj = bpy.context.selected_objects[0]
     context.view_layer.objects.active = obj
-# Translation de l'objet sur le plan (x=0, y=0)
+# Translation de l'objet sur le plan (z=0)
     s = 1
     if args.scale !=1:
         s = args.scale
-    w = obj.bound_box[0][2]*s
-    obj.location.z = obj.location.z - w
+    w = obj.bound_box[0][1]*s
+    obj.location = [0, 0, -w]
 
 # Possibly disable specular shading
     for slot in obj.material_slots:
