@@ -43,7 +43,18 @@ context = bpy.context
 scene = bpy.context.scene
 render = bpy.context.scene.render
 
+bpy.context.preferences.addons[
+    "cycles"
+].preferences.compute_device_type = "CUDA" # or "OPENCL"
 render.engine = args.engine
+scene.cycles.device = 'GPU'
+
+bpy.context.preferences.addons["cycles"].preferences.get_devices()
+print(bpy.context.preferences.addons["cycles"].preferences.compute_device_type)
+for d in bpy.context.preferences.addons["cycles"].preferences.devices:
+    d["use"] = 1 # Using all devices, include GPU and CPU
+    print(d["name"], d["use"])
+
 render.image_settings.color_mode = 'RGBA' # ('RGB', 'RGBA', ...)
 render.image_settings.color_depth = args.color_depth # ('8', '16')
 render.image_settings.file_format = args.format # ('PNG', 'OPEN_EXR', 'JPEG, ...)
