@@ -189,6 +189,7 @@ j = 0
 list = glob(directory + '/**/*.obj', recursive=True)
 
 if args.random == True:
+    bpy.context.scene.render.use_persistent_data = False
     N = args.num
     for p in range(N):
         name = random.choice(list)
@@ -287,12 +288,13 @@ if args.random == True:
 
 
             bpy.ops.render.render(write_still=True)  # render still
-
+            bpy.context.scene.render.use_persistent_data = True
             cam_empty.rotation_euler[2] += math.radians(stepsize)
 
 else:
     for name in glob(directory + '/**/*.obj', recursive=True):
-        name = random.choice(list)
+        # name = random.choice(list)
+        bpy.context.scene.render.use_persistent_data = False
 
         w = 0
         bpy.ops.object.select_by_type(type='MESH')
@@ -323,6 +325,7 @@ else:
         if args.remove_doubles:
             bpy.ops.object.mode_set(mode='EDIT')
             bpy.ops.mesh.remove_doubles()
+            bpy.ops.mesh.normals_make_consistent(inside=False)
             bpy.ops.object.mode_set(mode='OBJECT')
         if args.edge_split:
             bpy.ops.object.modifier_add(type='EDGE_SPLIT')
@@ -387,7 +390,7 @@ else:
             print("Render layers", render_layers.outputs.keys())
 
             bpy.ops.render.render(write_still=True)  # render still
-
+            bpy.context.scene.render.use_persistent_data = True
             cam_empty.rotation_euler[2] += math.radians(stepsize)
 ## Coordonnées bounding box ##
 
