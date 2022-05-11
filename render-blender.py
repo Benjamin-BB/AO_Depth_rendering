@@ -199,7 +199,7 @@ if args.random == True:
     N = args.num
     New_list = []
     for pp in range(N):
-        New_list.append(randome.choice(list))
+        New_list.append(random.choice(list))
     part = N//args.num_job
 
 
