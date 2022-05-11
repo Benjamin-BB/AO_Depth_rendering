@@ -2,6 +2,7 @@ import argparse, sys, os, math, re
 import bpy
 from glob import glob
 import random
+import multiprocessing
 
 ## blender --background --python render_blender.py -- --output_folder /tmp path_to_model.obj ##
 #test
@@ -33,6 +34,8 @@ parser.add_argument('--random', type=bool, default=False,
                     help='Randomize selected objects')
 parser.add_argument('--num', type=int, default=100,
                     help='number of object to render, to use only with random')
+parser.add_argument('--node', type=int, default=1,
+                    help='define the number of nodes used to render the objects')
 
 
 argv = sys.argv[sys.argv.index("--") + 1:]
@@ -188,10 +191,7 @@ j = 0
 
 list = glob(directory + '/**/*.obj', recursive=True)
 
-if args.random == True:
-    bpy.context.scene.render.use_persistent_data = False
-    N = args.num
-    for p in range(N):
+def render():
         name = random.choice(list)
 
         w = 0
@@ -290,6 +290,21 @@ if args.random == True:
             bpy.ops.render.render(write_still=True)  # render still
             bpy.context.scene.render.use_persistent_data = True
             cam_empty.rotation_euler[2] += math.radians(stepsize)
+
+
+
+if args.random == True:
+    bpy.context.scene.render.use_persistent_data = False
+    N = args.num
+    for p in range(N):
+        if args.node==1:
+            render()
+        else:
+            jobs=[]
+            for i in range(args.node):
+                p=multiprocessing.Process(target=render)
+                jobs.append(p)
+                p.start()
 
 else:
     for name in glob(directory + '/**/*.obj', recursive=True):
