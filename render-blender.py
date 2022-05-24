@@ -35,7 +35,7 @@ parser.add_argument('--num', type=int, default=100,
                     help='number of object to render, to use only with random')
 parser.add_argument('--job_id', type=int, default=1,
                     help='gives job id')
-parser.add_argument('--num_job', type=int, default=10,
+parser.add_argument('--num_job', type=int, default=1,
                     help='number of jobs')
 
 
@@ -198,9 +198,11 @@ if args.random == True:
     bpy.context.scene.render.use_persistent_data = False
     N = args.num
     New_list = []
+
     for pp in range(N):
         New_list.append(random.choice(list))
     part = N//args.num_job
+    j = (args.job_id-1) * part
 
 
     for p in range((args.job_id-1)*part, (args.job_id)*part):
