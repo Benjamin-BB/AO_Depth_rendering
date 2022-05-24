@@ -198,9 +198,9 @@ if args.random == True:
     bpy.context.scene.render.use_persistent_data = False
     N = args.num
     New_list = []
-
-    for pp in range(N):
-        New_list.append(random.choice(list))
+    list_numbers = random.sample(len(list), N)
+    for pp in list_numbers:
+        New_list.append(list[pp])
     part = N//args.num_job
     j = (args.job_id-1) * part
 
