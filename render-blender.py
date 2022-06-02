@@ -37,7 +37,8 @@ parser.add_argument('--job_id', type=int, default=1,
                     help='gives job id')
 parser.add_argument('--num_job', type=int, default=1,
                     help='number of jobs')
-
+parser.add_argument('--sample', type=int, default=512,
+                    help='number of samples for blender')
 
 argv = sys.argv[sys.argv.index("--") + 1:]
 args = parser.parse_args(argv)
@@ -67,7 +68,7 @@ render.resolution_x = args.resolution
 render.resolution_y = args.resolution
 render.resolution_percentage = 100
 render.film_transparent = True
-scene.cycles.samples = 512
+scene.cycles.samples = args.sample
 #test commit
 scene.use_nodes = True
 scene.view_layers["ViewLayer"].use_pass_normal = True
