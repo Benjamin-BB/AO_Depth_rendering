@@ -1,6 +1,7 @@
 import argparse, sys, os, math, re
+from typing import Tuple
 
-import bpy
+import bpy, bmesh
 from glob import glob
 import random
 
@@ -186,6 +187,80 @@ try:
 except:
     print('No object in the scene')
 
+def create_texture_node(node_tree: bpy.types.NodeTree, path: str, is_color_data: bool) -> bpy.types.Node:
+    # Instantiate a new texture image node
+    texture_node = node_tree.nodes.new(type='ShaderNodeTexImage')
+    # Open an image and set it to the node
+    texture_node.image = bpy.data.images.load(path)
+    # Set other parameters
+    texture_node.image.colorspace_settings.is_data = False if is_color_data else True
+    # Return the node
+    return texture_node
+
+def set_principled_node(principled_node: bpy.types.Node,
+                        base_color: Tuple[float, float, float, float] = (0.6, 0.6, 0.6, 1.0),
+                        subsurface: float = 0.0,
+                        subsurface_color: Tuple[float, float, float, float] = (0.8, 0.8, 0.8, 1.0),
+                        subsurface_radius: Tuple[float, float, float] = (1.0, 0.2, 0.1),
+                        metallic: float = 0.0,
+                        specular: float = 0.5,
+                        specular_tint: float = 0.0,
+                        roughness: float = 0.5,
+                        anisotropic: float = 0.0,
+                        anisotropic_rotation: float = 0.0,
+                        sheen: float = 0.0,
+                        sheen_tint: float = 0.5,
+                        clearcoat: float = 0.0,
+                        clearcoat_roughness: float = 0.03,
+                        ior: float = 1.45,
+                        transmission: float = 0.0,
+                        transmission_roughness: float = 0.0) -> None:
+    principled_node.inputs['Base Color'].default_value = base_color
+    principled_node.inputs['Subsurface'].default_value = subsurface
+    principled_node.inputs['Subsurface Color'].default_value = subsurface_color
+    principled_node.inputs['Subsurface Radius'].default_value = subsurface_radius
+    principled_node.inputs['Metallic'].default_value = metallic
+    principled_node.inputs['Specular'].default_value = specular
+    principled_node.inputs['Specular Tint'].default_value = specular_tint
+    principled_node.inputs['Roughness'].default_value = roughness
+    principled_node.inputs['Anisotropic'].default_value = anisotropic
+    principled_node.inputs['Anisotropic Rotation'].default_value = anisotropic_rotation
+    principled_node.inputs['Sheen'].default_value = sheen
+    principled_node.inputs['Sheen Tint'].default_value = sheen_tint
+    principled_node.inputs['Clearcoat'].default_value = clearcoat
+    principled_node.inputs['Clearcoat Roughness'].default_value = clearcoat_roughness
+    principled_node.inputs['IOR'].default_value = ior
+    principled_node.inputs['Transmission'].default_value = transmission
+    principled_node.inputs['Transmission Roughness'].default_value = transmission_roughness
+
+def random_material(mat):
+    set_principled_node(mat.node_tree.nodes["Principled BSDF"], 
+        base_color=(random.random(),random.random(),random.random(), 1.0),
+        metallic=random.random(),
+        roughness=random.random()
+        )
+
+def create_plane(scale=1.0):
+    """Create plane geometry"""
+    mesh = bpy.data.meshes.new("Plane")
+    obj = bpy.data.objects.new("Plane", mesh)
+
+    bpy.context.collection.objects.link(obj)
+
+    bm = bmesh.new()
+    bm.from_object(obj, bpy.context.view_layer.depsgraph)
+
+    s = scale
+    bm.verts.new((s,s,0))
+    bm.verts.new((s,-s,0))
+    bm.verts.new((-s,s,0))
+    bm.verts.new((-s,-s,0))
+
+    bmesh.ops.contextual_create(bm, geom=bm.verts)
+
+    bm.to_mesh(mesh)
+    return obj
+
 # Import textured mesh
 bpy.ops.object.select_all(action='DESELECT')
 # </editor-fold>
@@ -193,218 +268,128 @@ bpy.ops.object.select_all(action='DESELECT')
 directory = args.obj
 j = 0
 
-list = glob(directory + '/**/*.obj', recursive=True)
-print("Files:", list)
+random.seed(0) 
+list_objects = glob(directory + '/**/*.obj', recursive=True)
 if args.random == True:
-    random.seed(0) 
-    bpy.context.scene.render.use_persistent_data = False
     N = args.num
-    random_subset = random.sample(list, N)
-    part = N//args.num_job
-    j = (args.job_id-1) * part
+    list_objects = random.sample(list_objects, N)
+
+part = len(list_objects)//args.num_job
+j = (args.job_id-1) * part
+
+bpy.context.scene.render.use_persistent_data = False
+
+for p in range((args.job_id-1)*part, (args.job_id)*part):
+    name = list_objects[p]
+    w = 0
+    
+    # Delete all objects
+    bpy.ops.object.select_by_type(type='MESH')
+    bpy.ops.object.delete()
+
+    # Add plane
+    plane = create_plane(scale=100)
+    plane_material = bpy.data.materials.new(name="Plane BSDF")
+    plane_material.use_nodes = True
+    random_material(plane_material)
+    plane.data.materials.append(plane_material)
+    
+
+    # Render object
+    j = j+1
+    bpy.ops.import_scene.obj(filepath=name)
+    obj = bpy.context.selected_objects[0]
+    context.view_layer.objects.active = obj
+
+    # Translation de l'objet sur le plan (z=0)
+    s = 1
+    if args.scale !=1:
+        s = args.scale
+    w = obj.bound_box[0][1]*s
+    obj.location = [0, 0, -w]
+
+    # Possibly disable specular shading
+    for slot in obj.material_slots:
+        node = slot.material.node_tree.nodes['Principled BSDF']
+        node.inputs['Specular'].default_value = 0.05
+
+    if args.scale != 1:
+        bpy.ops.transform.resize(value=(args.scale,args.scale,args.scale))
+        bpy.ops.object.transform_apply(scale=True)
+    if args.remove_doubles:
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.remove_doubles()
+        bpy.ops.object.mode_set(mode='OBJECT')
+    if args.edge_split:
+        bpy.ops.object.modifier_add(type='EDGE_SPLIT')
+        context.object.modifiers["EdgeSplit"].split_angle = 1.32645
+        bpy.ops.object.modifier_apply(modifier="EdgeSplit")
+
+    # Set objekt IDs
+    obj.pass_index = 1
+
+    # Make light just directional, disable shadows.
+    light = bpy.data.lights['Light']
+    light.type = 'SUN'
+    light.use_shadow = False
+    # Possibly disable specular shading:
+    light.specular_factor = 1.0
+    light.energy = 10.0
+
+    # Add another light source so stuff facing away from light is not completely dark
+    bpy.ops.object.light_add(type='SUN')
+    light2 = bpy.data.lights['Sun']
+    light2.use_shadow = False
+    light2.specular_factor = 1.0
+    light2.energy = 0.015
+    bpy.data.objects['Sun'].rotation_euler = bpy.data.objects['Light'].rotation_euler
+    bpy.data.objects['Sun'].rotation_euler[0] += 180
+
+    # Place camera
+    cam = scene.objects['Camera']
+    cam.location = (0, 1, 0.6)
+    cam.data.lens = 35
+    cam.data.sensor_width = 32
+
+    cam_constraint = cam.constraints.new(type='TRACK_TO')
+    cam_constraint.track_axis = 'TRACK_NEGATIVE_Z'
+    cam_constraint.up_axis = 'UP_Y'
+
+    cam_empty = bpy.data.objects.new("Empty", None)
+    cam_empty.location = (0, 0, 0)
+    cam.parent = cam_empty
+
+    scene.collection.objects.link(cam_empty)
+    context.view_layer.objects.active = cam_empty
+    cam_constraint.target = cam_empty
+
+    stepsize = 360.0 / args.views
+    rotation_mode = 'XYZ'
+
+    model_identifier = os.path.split(os.path.split(args.obj)[0])[1]
+    fp = os.path.join(os.path.abspath(args.output_folder), model_identifier, model_identifier)
+
+    for i in range(0, args.views):
+        random_material(plane_material)
+        print("Rotation {}, {}".format((stepsize * i), math.radians(stepsize * i)))
+
+        render_file_path = fp + '_' + str(j) +'_r_{0:03d}'.format(int(i * stepsize))
+
+        scene.render.filepath = render_file_path
+        depth_file_output.file_slots[0].path = render_file_path + "_depth"
+        # normal_file_output.file_slots[0].path = render_file_path + "_normal"
+        ao_file_output.file_slots[0].path = render_file_path + "_ao"
+        # albedo_file_output.file_slots[0].path = render_file_path + "_albedo"
+        # id_file_output.file_slots[0].path = render_file_path + "_id"
+        print("Render layers", render_layers.outputs.keys())
 
 
-    for p in range((args.job_id-1)*part, (args.job_id)*part):
-        name = random_subset[p]
-        w = 0
-        bpy.ops.object.select_by_type(type='MESH')
-        bpy.ops.object.delete()
-        bpy.ops.mesh.primitive_plane_add()
+        bpy.ops.render.render(write_still=True)  # render still
+        bpy.context.scene.render.use_persistent_data = True
+        cam_empty.rotation_euler[2] += math.radians(stepsize)
+        
+        
 
-        # print(name)
-        j = j+1
-        bpy.ops.import_scene.obj(filepath=name)
-
-        obj = bpy.context.selected_objects[0]
-        context.view_layer.objects.active = obj
-
-        # Translation de l'objet sur le plan (z=0)
-        s = 1
-        if args.scale !=1:
-            s = args.scale
-        w = obj.bound_box[0][1]*s
-        obj.location = [0, 0, -w]
-
-        # Possibly disable specular shading
-        for slot in obj.material_slots:
-            node = slot.material.node_tree.nodes['Principled BSDF']
-            node.inputs['Specular'].default_value = 0.05
-
-        if args.scale != 1:
-            bpy.ops.transform.resize(value=(args.scale,args.scale,args.scale))
-            bpy.ops.object.transform_apply(scale=True)
-        if args.remove_doubles:
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.remove_doubles()
-            bpy.ops.object.mode_set(mode='OBJECT')
-        if args.edge_split:
-            bpy.ops.object.modifier_add(type='EDGE_SPLIT')
-            context.object.modifiers["EdgeSplit"].split_angle = 1.32645
-            bpy.ops.object.modifier_apply(modifier="EdgeSplit")
-
-        # Set objekt IDs
-        obj.pass_index = 1
-
-        # Make light just directional, disable shadows.
-        light = bpy.data.lights['Light']
-        light.type = 'SUN'
-        light.use_shadow = False
-        # Possibly disable specular shading:
-        light.specular_factor = 1.0
-        light.energy = 10.0
-
-        # Add another light source so stuff facing away from light is not completely dark
-        bpy.ops.object.light_add(type='SUN')
-        light2 = bpy.data.lights['Sun']
-        light2.use_shadow = False
-        light2.specular_factor = 1.0
-        light2.energy = 0.015
-        bpy.data.objects['Sun'].rotation_euler = bpy.data.objects['Light'].rotation_euler
-        bpy.data.objects['Sun'].rotation_euler[0] += 180
-
-        # Place camera
-        cam = scene.objects['Camera']
-        cam.location = (0, 1, 0.6)
-        cam.data.lens = 35
-        cam.data.sensor_width = 32
-
-        cam_constraint = cam.constraints.new(type='TRACK_TO')
-        cam_constraint.track_axis = 'TRACK_NEGATIVE_Z'
-        cam_constraint.up_axis = 'UP_Y'
-
-        cam_empty = bpy.data.objects.new("Empty", None)
-        cam_empty.location = (0, 0, 0)
-        cam.parent = cam_empty
-
-        scene.collection.objects.link(cam_empty)
-        context.view_layer.objects.active = cam_empty
-        cam_constraint.target = cam_empty
-
-        stepsize = 360.0 / args.views
-        rotation_mode = 'XYZ'
-
-        model_identifier = os.path.split(os.path.split(args.obj)[0])[1]
-        fp = os.path.join(os.path.abspath(args.output_folder), model_identifier, model_identifier)
-
-        for i in range(0, args.views):
-            print("Rotation {}, {}".format((stepsize * i), math.radians(stepsize * i)))
-
-            render_file_path = fp + '_' + str(j) +'_r_{0:03d}'.format(int(i * stepsize))
-
-            scene.render.filepath = render_file_path
-            depth_file_output.file_slots[0].path = render_file_path + "_depth"
-            # normal_file_output.file_slots[0].path = render_file_path + "_normal"
-            ao_file_output.file_slots[0].path = render_file_path + "_ao"
-            # albedo_file_output.file_slots[0].path = render_file_path + "_albedo"
-            # id_file_output.file_slots[0].path = render_file_path + "_id"
-            print("Render layers", render_layers.outputs.keys())
-
-
-            bpy.ops.render.render(write_still=True)  # render still
-            bpy.context.scene.render.use_persistent_data = True
-            cam_empty.rotation_euler[2] += math.radians(stepsize)
-
-else:
-    for name in glob(directory + '/**/*.obj', recursive=True):
-        # name = random.choice(list)
-        bpy.context.scene.render.use_persistent_data = False
-
-        w = 0
-        bpy.ops.object.select_by_type(type='MESH')
-        bpy.ops.object.delete()
-        bpy.ops.mesh.primitive_plane_add()
-
-        # print(name)
-        j = j + 1
-        bpy.ops.import_scene.obj(filepath=name)
-
-        obj = bpy.context.selected_objects[0]
-        context.view_layer.objects.active = obj
-        # Translation de l'objet sur le plan (z=0)
-        s = 1
-        if args.scale != 1:
-            s = args.scale
-        w = obj.bound_box[0][1] * s
-        obj.location = [0, 0, -w]
-
-        # Possibly disable specular shading
-        for slot in obj.material_slots:
-            node = slot.material.node_tree.nodes['Principled BSDF']
-            node.inputs['Specular'].default_value = 0.05
-
-        if args.scale != 1:
-            bpy.ops.transform.resize(value=(args.scale, args.scale, args.scale))
-            bpy.ops.object.transform_apply(scale=True)
-        if args.remove_doubles:
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.remove_doubles()
-            bpy.ops.mesh.normals_make_consistent(inside=False)
-            bpy.ops.object.mode_set(mode='OBJECT')
-        if args.edge_split:
-            bpy.ops.object.modifier_add(type='EDGE_SPLIT')
-            context.object.modifiers["EdgeSplit"].split_angle = 1.32645
-            bpy.ops.object.modifier_apply(modifier="EdgeSplit")
-
-        # Set objekt IDs
-        obj.pass_index = 1
-
-        # Make light just directional, disable shadows.
-        light = bpy.data.lights['Light']
-        light.type = 'SUN'
-        light.use_shadow = False
-        # Possibly disable specular shading:
-        light.specular_factor = 1.0
-        light.energy = 10.0
-
-        # Add another light source so stuff facing away from light is not completely dark
-        bpy.ops.object.light_add(type='SUN')
-        light2 = bpy.data.lights['Sun']
-        light2.use_shadow = False
-        light2.specular_factor = 1.0
-        light2.energy = 0.015
-        bpy.data.objects['Sun'].rotation_euler = bpy.data.objects['Light'].rotation_euler
-        bpy.data.objects['Sun'].rotation_euler[0] += 180
-
-        # Place camera
-        cam = scene.objects['Camera']
-        cam.location = (0, 1, 0.6)
-        cam.data.lens = 35
-        cam.data.sensor_width = 32
-
-        cam_constraint = cam.constraints.new(type='TRACK_TO')
-        cam_constraint.track_axis = 'TRACK_NEGATIVE_Z'
-        cam_constraint.up_axis = 'UP_Y'
-
-        cam_empty = bpy.data.objects.new("Empty", None)
-        cam_empty.location = (0, 0, 0)
-        cam.parent = cam_empty
-
-        scene.collection.objects.link(cam_empty)
-        context.view_layer.objects.active = cam_empty
-        cam_constraint.target = cam_empty
-
-        stepsize = 360.0 / args.views
-        rotation_mode = 'XYZ'
-
-        model_identifier = os.path.split(os.path.split(args.obj)[0])[1]
-        fp = os.path.join(os.path.abspath(args.output_folder), model_identifier, model_identifier)
-
-        for i in range(0, args.views):
-            print("Rotation {}, {}".format((stepsize * i), math.radians(stepsize * i)))
-
-            render_file_path = fp + '_' + str(j) + '_r_{0:03d}'.format(int(i * stepsize))
-
-            scene.render.filepath = render_file_path
-            depth_file_output.file_slots[0].path = render_file_path + "_depth"
-            # normal_file_output.file_slots[0].path = render_file_path + "_normal"
-            ao_file_output.file_slots[0].path = render_file_path + "_ao"
-            # albedo_file_output.file_slots[0].path = render_file_path + "_albedo"
-            # id_file_output.file_slots[0].path = render_file_path + "_id"
-            print("Render layers", render_layers.outputs.keys())
-
-            bpy.ops.render.render(write_still=True)  # render still
-            bpy.context.scene.render.use_persistent_data = True
-            cam_empty.rotation_euler[2] += math.radians(stepsize)
 ## Coordonnées bounding box ##
 
 # n=0
