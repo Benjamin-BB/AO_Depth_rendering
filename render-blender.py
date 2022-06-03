@@ -1,4 +1,5 @@
 import argparse, sys, os, math, re
+
 import bpy
 from glob import glob
 import random
@@ -191,23 +192,20 @@ bpy.ops.object.select_all(action='DESELECT')
 
 directory = args.obj
 j = 0
-# for name in glob(directory + '/**/*.obj', recursive=True):
 
 list = glob(directory + '/**/*.obj', recursive=True)
-
+print("Files:", list)
 if args.random == True:
+    random.seed(0) 
     bpy.context.scene.render.use_persistent_data = False
     N = args.num
-    New_list = []
-    list_numbers = random.sample(len(list), N)
-    for pp in list_numbers:
-        New_list.append(list[pp])
+    random_subset = random.sample(list, N)
     part = N//args.num_job
     j = (args.job_id-1) * part
 
 
     for p in range((args.job_id-1)*part, (args.job_id)*part):
-        name = New_list[p]
+        name = random_subset[p]
         w = 0
         bpy.ops.object.select_by_type(type='MESH')
         bpy.ops.object.delete()
@@ -219,14 +217,15 @@ if args.random == True:
 
         obj = bpy.context.selected_objects[0]
         context.view_layer.objects.active = obj
-    # Translation de l'objet sur le plan (z=0)
+
+        # Translation de l'objet sur le plan (z=0)
         s = 1
         if args.scale !=1:
             s = args.scale
         w = obj.bound_box[0][1]*s
         obj.location = [0, 0, -w]
 
-    # Possibly disable specular shading
+        # Possibly disable specular shading
         for slot in obj.material_slots:
             node = slot.material.node_tree.nodes['Principled BSDF']
             node.inputs['Specular'].default_value = 0.05
