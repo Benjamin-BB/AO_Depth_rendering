@@ -42,6 +42,11 @@ parser.add_argument('--num_job', type=int, default=1,
 parser.add_argument('--sample', type=int, default=512,
                     help='number of samples for blender')
 parser.add_argument("--gltf", action="store_true")
+parser.add_argument("--randmat", action="store_true")
+parser.add_argument("--randlight", action="store_true")
+parser.add_argument("--randcamera", action="store_true")
+parser.add_argument("--denoise", action="store_true")
+
 
 argv = sys.argv[sys.argv.index("--") + 1:]
 args = parser.parse_args(argv)
@@ -72,6 +77,10 @@ render.resolution_y = args.resolution
 render.resolution_percentage = 100
 render.film_transparent = True
 scene.cycles.samples = args.sample
+if args.denoise:
+    bpy.context.scene.cycles.use_denoising = True
+
+
 #test commit
 scene.use_nodes = True
 scene.view_layers["ViewLayer"].use_pass_normal = True
@@ -294,7 +303,7 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
     bpy.ops.object.delete()
 
     # Add plane
-    plane = create_plane(scale=100)
+    plane = create_plane(scale=1000)
     plane_material = bpy.data.materials.new(name="Plane BSDF")
     plane_material.use_nodes = True
     random_material(plane_material)
@@ -332,29 +341,20 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
     if args.scale != 1:
         bpy.ops.transform.resize(value=(args.scale,args.scale,args.scale))
         bpy.ops.object.transform_apply(scale=True)
-
-    # for obj in bpy.context.selected_objects:  
-    #     context.view_layer.objects.active = obj
-
-    #     # Possibly disable specular shading
-    #     for slot in obj.material_slots:
-    #         node = slot.material.node_tree.nodes['Principled BSDF']
-    #         node.inputs['Specular'].default_value = 0.05
-
     
     # Make light just directional, disable shadows.
     light = bpy.data.lights['Light']
     light.type = 'SUN'
-    light.use_shadow = False
+    light.use_shadow = True
     # Possibly disable specular shading:
-    light.specular_factor = 1.0
+    #light.specular_factor = 1.0
     light.energy = 10.0
 
     # Add another light source so stuff facing away from light is not completely dark
     bpy.ops.object.light_add(type='SUN')
     light2 = bpy.data.lights['Sun']
-    light2.use_shadow = False
-    light2.specular_factor = 1.0
+    light2.use_shadow = True
+    #light2.specular_factor = 1.0
     light2.energy = 0.015
     bpy.data.objects['Sun'].rotation_euler = bpy.data.objects['Light'].rotation_euler
     bpy.data.objects['Sun'].rotation_euler[0] += 180
@@ -364,6 +364,7 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
     cam.location = (0, 1, 0.6)
     cam.data.lens = 35
     cam.data.sensor_width = 32
+    cam.data.clip_end = 10000
 
     cam_constraint = cam.constraints.new(type='TRACK_TO')
     cam_constraint.track_axis = 'TRACK_NEGATIVE_Z'
@@ -380,15 +381,31 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
     stepsize = 360.0 / args.views
     rotation_mode = 'XYZ'
 
-    model_identifier = os.path.split(os.path.split(args.obj)[0])[1]
-    fp = os.path.join(os.path.abspath(args.output_folder), model_identifier, model_identifier)
+    fp = os.path.abspath(args.output_folder) + os.path.sep
 
     for i in range(0, args.views):
         random_material(plane_material)
+        if(args.randmat):
+            for slot in obj.material_slots:
+                random_material(slot.material)
+
+        if(args.randlight):
+            bpy.data.objects['Sun'].rotation_euler[0] = 180*random.random()
+            bpy.data.objects['Sun'].rotation_euler[1] = 90*random.random()
+            bpy.data.objects['Sun'].rotation_euler[2] = 90*random.random()
+            bpy.data.objects['Light'].rotation_euler[0] = 180*random.random()
+            bpy.data.objects['Light'].rotation_euler[1] = 90*random.random()
+            bpy.data.objects['Light'].rotation_euler[2] = 90*random.random()
+
+        if(args.randcamera):
+            cam.location = (0, 0.2+random.random()*2.0, 0.2+random.random()*1.0)
+            cam.data.lens = 20 + random.random()*20
+            cam.data.sensor_width = 20 + random.random()*20
+
         print("Rotation {}, {}".format((stepsize * i), math.radians(stepsize * i)))
 
         render_file_path = fp + '_' + str(j) +'_r_{0:03d}'.format(int(i * stepsize))
-
+        print(f"Output: {render_file_path}")
         scene.render.filepath = render_file_path
         depth_file_output.file_slots[0].path = render_file_path + "_depth"
         ao_file_output.file_slots[0].path = render_file_path + "_ao"
