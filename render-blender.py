@@ -45,6 +45,7 @@ parser.add_argument("--gltf", action="store_true")
 parser.add_argument("--randmat", action="store_true")
 parser.add_argument("--randlight", action="store_true")
 parser.add_argument("--randcamera", action="store_true")
+parser.add_argument("--randscale", action="store_true")
 parser.add_argument("--denoise", action="store_true")
 parser.add_argument("--cache", type=str, default="")
 
@@ -335,10 +336,14 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
 
     print(f"Number objects: {len(bpy.context.selected_objects)}")
     w = 10000.0
+    if args.randscale:
+        scale = 0.1 + random.random()*10.0
+    else:
+        scale = args.scale
     for obj in bpy.context.selected_objects[:1]:  
         print(f" - {obj.name}")
-        w = min(obj.bound_box[0][1]*args.scale, w)
-
+        w = min(obj.bound_box[0][1]*scale, w)
+   
     # Translation de l'objet sur le plan (z=0) and scale
     obj = bpy.context.selected_objects[0]
     context.view_layer.objects.active = obj
@@ -369,7 +374,7 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
     cam.location = (0, 1, 0.6)
     cam.data.lens = 35
     cam.data.sensor_width = 32
-    cam.data.clip_end = 10000
+    cam.data.clip_end = 1000
 
     cam_constraint = cam.constraints.new(type='TRACK_TO')
     cam_constraint.track_axis = 'TRACK_NEGATIVE_Z'
@@ -403,13 +408,16 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
             bpy.data.objects['Light'].rotation_euler[2] = 90*random.random()
 
         if(args.randcamera):
-            cam.location = (0, 0.2+random.random()*2.0, 0.2+random.random()*1.0)
+            cam_empty.rotation_euler[2] = math.radians(random.random()*360)
+            cam_empty.rotation_euler[0] = math.radians(random.random()*90)
+            dist = 2 * random.random() + 0.3
+            cam.location = (0, 1*dist*scale, 0.0)
             cam.data.lens = 20 + random.random()*20
             cam.data.sensor_width = 20 + random.random()*20
 
         print("Rotation {}, {}".format((stepsize * i), math.radians(stepsize * i)))
 
-        render_file_path = fp + '_' + str(j) +'_r_{0:03d}'.format(int(i * stepsize))
+        render_file_path = fp + str(j) +'_r_{0:03d}'.format(int(i))
         print(f"Output: {render_file_path}")
         scene.render.filepath = render_file_path
         depth_file_output.file_slots[0].path = render_file_path + "_depth"
