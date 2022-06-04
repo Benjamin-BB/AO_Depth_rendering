@@ -280,7 +280,7 @@ bpy.ops.object.select_all(action='DESELECT')
 directory = args.obj
 j = 0
 
-random.seed(0) 
+random.seed(args.job_id) 
 
 if args.cache != "":
     list_objects = open(args.cache, "r").readlines()
