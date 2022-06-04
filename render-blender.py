@@ -46,6 +46,7 @@ parser.add_argument("--randmat", action="store_true")
 parser.add_argument("--randlight", action="store_true")
 parser.add_argument("--randcamera", action="store_true")
 parser.add_argument("--denoise", action="store_true")
+parser.add_argument("--cache", type=str, default="")
 
 
 argv = sys.argv[sys.argv.index("--") + 1:]
@@ -280,10 +281,14 @@ j = 0
 
 random.seed(0) 
 
-if args.gltf:
-    list_objects = glob(directory + '/**/*.gltf', recursive=True)
+if args.cache != "":
+    list_objects = open(args.cache, "r").readlines()
+    list_objects = [v.strip() for v in list_objects]
 else:
-    list_objects = glob(directory + '/**/*.obj', recursive=True)
+    if args.gltf:
+        list_objects = glob(directory + '/**/*.gltf', recursive=True)
+    else:
+        list_objects = glob(directory + '/**/*.obj', recursive=True)
 
 if args.random == True:
     N = args.num
