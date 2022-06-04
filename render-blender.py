@@ -41,6 +41,7 @@ parser.add_argument('--num_job', type=int, default=1,
                     help='number of jobs')
 parser.add_argument('--sample', type=int, default=512,
                     help='number of samples for blender')
+parser.add_argument("--gltf", action="store_true")
 
 argv = sys.argv[sys.argv.index("--") + 1:]
 args = parser.parse_args(argv)
@@ -269,7 +270,12 @@ directory = args.obj
 j = 0
 
 random.seed(0) 
-list_objects = glob(directory + '/**/*.obj', recursive=True)
+
+if args.gltf:
+    list_objects = glob(directory + '/**/*.gltf', recursive=True)
+else:
+    list_objects = glob(directory + '/**/*.obj', recursive=True)
+
 if args.random == True:
     N = args.num
     list_objects = random.sample(list_objects, N)
@@ -294,40 +300,48 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
     random_material(plane_material)
     plane.data.materials.append(plane_material)
     
-
     # Render object
     j = j+1
-    bpy.ops.import_scene.obj(filepath=name)
+    if args.gltf:
+        print(f"Load: {name}")
+        bpy.ops.import_scene.gltf(filepath=name, merge_vertices=True)
+    else:
+        bpy.ops.import_scene.obj(filepath=name)
+        obj = bpy.context.selected_objects[0]
+        context.view_layer.objects.active = obj
+        # Apply correction only for obj objects
+        if args.remove_doubles:
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.remove_doubles()
+            bpy.ops.object.mode_set(mode='OBJECT')
+        if args.edge_split:
+            bpy.ops.object.modifier_add(type='EDGE_SPLIT')
+            context.object.modifiers["EdgeSplit"].split_angle = 1.32645
+            bpy.ops.object.modifier_apply(modifier="EdgeSplit")
+
+    print(f"Number objects: {len(bpy.context.selected_objects)}")
+    w = 10000.0
+    for obj in bpy.context.selected_objects[:1]:  
+        print(f" - {obj.name}")
+        w = min(obj.bound_box[0][1]*args.scale, w)
+
+    # Translation de l'objet sur le plan (z=0) and scale
     obj = bpy.context.selected_objects[0]
     context.view_layer.objects.active = obj
-
-    # Translation de l'objet sur le plan (z=0)
-    s = 1
-    if args.scale !=1:
-        s = args.scale
-    w = obj.bound_box[0][1]*s
     obj.location = [0, 0, -w]
-
-    # Possibly disable specular shading
-    for slot in obj.material_slots:
-        node = slot.material.node_tree.nodes['Principled BSDF']
-        node.inputs['Specular'].default_value = 0.05
-
     if args.scale != 1:
         bpy.ops.transform.resize(value=(args.scale,args.scale,args.scale))
         bpy.ops.object.transform_apply(scale=True)
-    if args.remove_doubles:
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.remove_doubles()
-        bpy.ops.object.mode_set(mode='OBJECT')
-    if args.edge_split:
-        bpy.ops.object.modifier_add(type='EDGE_SPLIT')
-        context.object.modifiers["EdgeSplit"].split_angle = 1.32645
-        bpy.ops.object.modifier_apply(modifier="EdgeSplit")
 
-    # Set objekt IDs
-    obj.pass_index = 1
+    # for obj in bpy.context.selected_objects:  
+    #     context.view_layer.objects.active = obj
 
+    #     # Possibly disable specular shading
+    #     for slot in obj.material_slots:
+    #         node = slot.material.node_tree.nodes['Principled BSDF']
+    #         node.inputs['Specular'].default_value = 0.05
+
+    
     # Make light just directional, disable shadows.
     light = bpy.data.lights['Light']
     light.type = 'SUN'
@@ -377,10 +391,7 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
 
         scene.render.filepath = render_file_path
         depth_file_output.file_slots[0].path = render_file_path + "_depth"
-        # normal_file_output.file_slots[0].path = render_file_path + "_normal"
         ao_file_output.file_slots[0].path = render_file_path + "_ao"
-        # albedo_file_output.file_slots[0].path = render_file_path + "_albedo"
-        # id_file_output.file_slots[0].path = render_file_path + "_id"
         print("Render layers", render_layers.outputs.keys())
 
 
@@ -388,20 +399,3 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
         bpy.context.scene.render.use_persistent_data = True
         cam_empty.rotation_euler[2] += math.radians(stepsize)
         
-        
-
-## Coordonnées bounding box ##
-
-# n=0
-# p=0
-# for n in range(8):
-#     for p in range(3):
-#         print(obj.bound_box[n][p])
-# print(obj.bound_box[0][0])
-# print(obj.bound_box[0][1])
-# print(obj.bound_box[1][0])
-# print(obj.bound_box[1][1])
-# print(obj.bound_box[2][0])
-# print(obj.bound_box[2][1])
-# print(obj.bound_box[3][0])
-# print(obj.bound_box[3][1])
