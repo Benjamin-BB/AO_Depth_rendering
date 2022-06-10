@@ -78,7 +78,7 @@ render.image_settings.file_format = args.format # ('PNG', 'OPEN_EXR', 'JPEG, ...
 render.resolution_x = args.resolution
 render.resolution_y = args.resolution
 render.resolution_percentage = 100
-render.film_transparent = True
+render.film_transparent = False # True if we want to hide the background
 scene.cycles.samples = args.sample
 if args.denoise:
     bpy.context.scene.cycles.use_denoising = True
@@ -159,18 +159,18 @@ normal_file_output.format.file_format = args.format
 links.new(bias_node.outputs[0], normal_file_output.inputs[0])
 
 # Create albedo output nodes
-alpha_albedo = nodes.new(type="CompositorNodeSetAlpha")
-links.new(render_layers.outputs['DiffCol'], alpha_albedo.inputs['Image'])
-links.new(render_layers.outputs['Alpha'], alpha_albedo.inputs['Alpha'])
+#alpha_albedo = nodes.new(type="CompositorNodeSetAlpha")
+#links.new(render_layers.outputs['DiffCol'], alpha_albedo.inputs['Image'])
+#links.new(render_layers.outputs['Alpha'], alpha_albedo.inputs['Alpha'])
 
-albedo_file_output = nodes.new(type="CompositorNodeOutputFile")
-albedo_file_output.label = 'Albedo Output'
-albedo_file_output.base_path = ''
-albedo_file_output.file_slots[0].use_node_format = True
-albedo_file_output.format.file_format = args.format
-albedo_file_output.format.color_mode = 'RGBA'
-albedo_file_output.format.color_depth = args.color_depth
-links.new(alpha_albedo.outputs['Image'], albedo_file_output.inputs[0])
+# albedo_file_output = nodes.new(type="CompositorNodeOutputFile")
+# albedo_file_output.label = 'Albedo Output'
+# albedo_file_output.base_path = ''
+# albedo_file_output.file_slots[0].use_node_format = True
+# albedo_file_output.format.file_format = args.format
+# albedo_file_output.format.color_mode = 'RGBA'
+# albedo_file_output.format.color_depth = args.color_depth
+# links.new(alpha_albedo.outputs['Image'], albedo_file_output.inputs[0])
 
 # Create id map output nodes
 id_file_output = nodes.new(type="CompositorNodeOutputFile")
@@ -296,7 +296,8 @@ if args.hdri != "":
     
     # Create HDRI node (for env map)
     hdri_node = world.node_tree.nodes.new(type="ShaderNodeTexEnvironment")
-    back_node = world.node_tree.nodes['Background']
+    back_node = world.node_tree.nodes['World Output']
+    world.node_tree.links.new(hdri_node.outputs['Color'], back_node.inputs['Surface'])
     # Create Mapping node (to generate transformation)
     hdri_mapping_node = world.node_tree.nodes.new(type="ShaderNodeMapping")
     world.node_tree.links.new(hdri_mapping_node.outputs["Vector"], hdri_node.inputs["Vector"])
@@ -305,7 +306,6 @@ if args.hdri != "":
     world.node_tree.links.new(hdri_texcoords_node.outputs["Generated"], hdri_mapping_node.inputs["Vector"])
 
     # Final link and clean the default light
-    world.node_tree.links.new(hdri_node.outputs['Color'], back_node.inputs['Color'])
     bpy.ops.object.delete({"selected_objects": [bpy.data.lights['Light']]})
 else:
     # Add another light
@@ -393,6 +393,7 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
             bpy.data.images.remove(hdri_node.image)
         print(f"Image: {image}")
         hdri_node.image = bpy.data.images.load(image)
+        hdri_node.image.alpha_mode = 'NONE'
         # Change rotation
         hdri_mapping_node.inputs["Rotation"].default_value[2] = math.radians(360*random.random())
     else:
@@ -449,6 +450,7 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
                     hdri_node.image.user_clear()
                     bpy.data.images.remove(hdri_node.image)
                 hdri_node.image = bpy.data.images.load(image)
+                hdri_node.image.alpha_mode = 'NONE'
                 # Change rotation
                 hdri_mapping_node.inputs["Rotation"].default_value[2] = math.radians(360*random.random())
         else:
