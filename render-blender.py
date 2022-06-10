@@ -48,6 +48,7 @@ parser.add_argument("--randcamera", action="store_true")
 parser.add_argument("--randscale", action="store_true")
 parser.add_argument("--denoise", action="store_true")
 parser.add_argument("--cache", type=str, default="")
+parser.add_argument("--hdri", type=str, default="")
 
 
 argv = sys.argv[sys.argv.index("--") + 1:]
@@ -284,6 +285,22 @@ j = 0
 
 random.seed(args.job_id) 
 
+# Look at all HDRI maps
+hdri_files = []
+hdri_node = None
+if args.hdri != "":
+    world =  bpy.data.worlds['World']
+    world.use_nodes = True
+    hdri_files = glob(args.hdri + '/**/*.exr', recursive=True)
+    hdri_node = world.node_tree.nodes.new(type="ShaderNodeTexEnvironment")
+    back_node = world.node_tree.nodes['Background']
+    world.node_tree.links.new(hdri_node.outputs['Color'], back_node.inputs['Color'])
+    bpy.ops.object.delete({"selected_objects": [bpy.data.lights['Light']]})
+else:
+    # Add another light
+    bpy.ops.object.light_add(type='SUN')
+
+
 if args.cache != "":
     list_objects = open(args.cache, "r").readlines()
     list_objects = [v.strip() for v in list_objects]
@@ -312,10 +329,11 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
 
     # Add plane
     plane = create_plane(scale=1000)
-    plane_material = bpy.data.materials.new(name="Plane BSDF")
-    plane_material.use_nodes = True
-    random_material(plane_material)
-    plane.data.materials.append(plane_material)
+    if args.randmat:
+        plane_material = bpy.data.materials.new(name="Plane BSDF")
+        plane_material.use_nodes = True
+        random_material(plane_material)
+        plane.data.materials.append(plane_material)
     
     # Render object
     j = j+1
@@ -356,23 +374,26 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
         bpy.ops.object.transform_apply(scale=True)
     
     # Make light just directional, disable shadows.
-    light = bpy.data.lights['Light']
-    light.type = 'SUN'
-    light.use_shadow = True
-    # Possibly disable specular shading:
-    #light.specular_factor = 1.0
-    light.energy = 10.0
+    if hdri_node:
+        image = random.sample(hdri_files, 1)[0]
+        if hdri_node.image != None:
+            hdri_node.image.user_clear()
+            bpy.data.images.remove(hdri_node.image)
+        print(f"Image: {image}")
+        hdri_node.image = bpy.data.images.load(image)
+    else:
+        light = bpy.data.lights['Light']
+        light.type = 'SUN'
+        light.use_shadow = True
+        light.energy = 10.0
 
-    # Add another light source so stuff facing away from light is not completely dark
-    bpy.ops.object.light_add(type='SUN')
-    light2 = bpy.data.lights['Sun']
-    light2.use_shadow = True
-    #light2.specular_factor = 1.0
-    light2.energy = 0.015
-    bpy.data.objects['Sun'].rotation_euler = bpy.data.objects['Light'].rotation_euler
-    bpy.data.objects['Sun'].rotation_euler[0] += math.radians(180)
-    bpy.data.objects['Sun'].rotation_mode = 'ZYX'
-    bpy.data.objects['Light'].rotation_mode = 'ZYX'
+        light2 = bpy.data.lights['Sun']
+        light2.use_shadow = True
+        light2.energy = 0.015
+        bpy.data.objects['Sun'].rotation_euler = bpy.data.objects['Light'].rotation_euler
+        bpy.data.objects['Sun'].rotation_euler[0] += math.radians(180)
+        bpy.data.objects['Sun'].rotation_mode = 'ZYX'
+        bpy.data.objects['Light'].rotation_mode = 'ZYX'
 
     # Place camera
     cam = scene.objects['Camera']
@@ -380,6 +401,7 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
     cam.data.lens = 35
     cam.data.sensor_width = 32
     cam.data.clip_end = 1000
+    cam.data.clip_start = 0.0001
 
     cam_constraint = cam.constraints.new(type='TRACK_TO')
     cam_constraint.track_axis = 'TRACK_NEGATIVE_Z'
@@ -399,16 +421,24 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
     fp = os.path.abspath(args.output_folder) + os.path.sep
 
     for i in range(0, args.views):
-        random_material(plane_material)
         if(args.randmat):
+            random_material(plane_material)
             for slot in obj.material_slots:
                 random_material(slot.material)
 
-        if(args.randlight):
-            bpy.data.objects['Sun'].rotation_euler[0] = math.radians(85*random.random())
-            bpy.data.objects['Sun'].rotation_euler[2] = math.radians(360*random.random())
-            bpy.data.objects['Light'].rotation_euler[0] = math.radians(85*random.random())
-            bpy.data.objects['Light'].rotation_euler[2] = math.radians(360*random.random())
+        if hdri_node:
+            if(args.randlight):
+                image = random.sample(hdri_files, 1)[0]
+                if hdri_node.image != None:
+                    hdri_node.image.user_clear()
+                    bpy.data.images.remove(hdri_node.image)
+                hdri_node.image = bpy.data.images.load(image)
+        else:
+            if(args.randlight):
+                bpy.data.objects['Sun'].rotation_euler[0] = math.radians(85*random.random())
+                bpy.data.objects['Sun'].rotation_euler[2] = math.radians(360*random.random())
+                bpy.data.objects['Light'].rotation_euler[0] = math.radians(85*random.random())
+                bpy.data.objects['Light'].rotation_euler[2] = math.radians(360*random.random())
 
         if(args.randcamera):
             cam_empty.rotation_euler[2] = math.radians(random.random()*360)
