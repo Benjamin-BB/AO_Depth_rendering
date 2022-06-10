@@ -183,14 +183,14 @@ if args.format == 'OPEN_EXR':
     links.new(render_layers.outputs['IndexOB'], id_file_output.inputs[0])
 else:
     id_file_output.format.color_mode = 'BW'
+    links.new(render_layers.outputs['IndexOB'], id_file_output.inputs[0])
+    # divide_node = nodes.new(type='CompositorNodeMath')
+    # divide_node.operation = 'DIVIDE'
+    # divide_node.use_clamp = False
+    # divide_node.inputs[1].default_value = 2**int(args.color_depth)
 
-    divide_node = nodes.new(type='CompositorNodeMath')
-    divide_node.operation = 'DIVIDE'
-    divide_node.use_clamp = False
-    divide_node.inputs[1].default_value = 2**int(args.color_depth)
-
-    links.new(render_layers.outputs['IndexOB'], divide_node.inputs[0])
-    links.new(divide_node.outputs[0], id_file_output.inputs[0])
+    # links.new(render_layers.outputs['IndexOB'], divide_node.inputs[0])
+    # links.new(divide_node.outputs[0], id_file_output.inputs[0])
 
 # Delete default cube
 try:
@@ -226,7 +226,8 @@ def set_principled_node(principled_node: bpy.types.Node,
                         clearcoat_roughness: float = 0.03,
                         ior: float = 1.45,
                         transmission: float = 0.0,
-                        transmission_roughness: float = 0.0) -> None:
+                        transmission_roughness: float = 0.0,
+                        alpha: float = 1.0) -> None:
     principled_node.inputs['Base Color'].default_value = base_color
     principled_node.inputs['Subsurface'].default_value = subsurface
     principled_node.inputs['Subsurface Color'].default_value = subsurface_color
@@ -244,6 +245,7 @@ def set_principled_node(principled_node: bpy.types.Node,
     principled_node.inputs['IOR'].default_value = ior
     principled_node.inputs['Transmission'].default_value = transmission
     principled_node.inputs['Transmission Roughness'].default_value = transmission_roughness
+    principled_node.inputs['Alpha'].default_value = alpha
 
 def random_material(mat):
     set_principled_node(mat.node_tree.nodes["Principled BSDF"], 
@@ -346,6 +348,7 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
    
     # Translation de l'objet sur le plan (z=0) and scale
     obj = bpy.context.selected_objects[0]
+    obj.pass_index = 1
     context.view_layer.objects.active = obj
     obj.location = [0, 0, -w]
     if args.scale != 1:
@@ -367,7 +370,9 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
     #light2.specular_factor = 1.0
     light2.energy = 0.015
     bpy.data.objects['Sun'].rotation_euler = bpy.data.objects['Light'].rotation_euler
-    bpy.data.objects['Sun'].rotation_euler[0] += 180
+    bpy.data.objects['Sun'].rotation_euler[0] += math.radians(180)
+    bpy.data.objects['Sun'].rotation_mode = 'ZYX'
+    bpy.data.objects['Light'].rotation_mode = 'ZYX'
 
     # Place camera
     cam = scene.objects['Camera']
@@ -383,13 +388,13 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
     cam_empty = bpy.data.objects.new("Empty", None)
     cam_empty.location = (0, 0, 0)
     cam.parent = cam_empty
+    cam_empty.rotation_mode = 'XYZ' # See why this is the correct mode for the camera
 
     scene.collection.objects.link(cam_empty)
     context.view_layer.objects.active = cam_empty
     cam_constraint.target = cam_empty
 
     stepsize = 360.0 / args.views
-    rotation_mode = 'XYZ'
 
     fp = os.path.abspath(args.output_folder) + os.path.sep
 
@@ -400,17 +405,15 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
                 random_material(slot.material)
 
         if(args.randlight):
-            bpy.data.objects['Sun'].rotation_euler[0] = 180*random.random()
-            bpy.data.objects['Sun'].rotation_euler[1] = 90*random.random()
-            bpy.data.objects['Sun'].rotation_euler[2] = 90*random.random()
-            bpy.data.objects['Light'].rotation_euler[0] = 180*random.random()
-            bpy.data.objects['Light'].rotation_euler[1] = 90*random.random()
-            bpy.data.objects['Light'].rotation_euler[2] = 90*random.random()
+            bpy.data.objects['Sun'].rotation_euler[0] = math.radians(85*random.random())
+            bpy.data.objects['Sun'].rotation_euler[2] = math.radians(360*random.random())
+            bpy.data.objects['Light'].rotation_euler[0] = math.radians(85*random.random())
+            bpy.data.objects['Light'].rotation_euler[2] = math.radians(360*random.random())
 
         if(args.randcamera):
             cam_empty.rotation_euler[2] = math.radians(random.random()*360)
-            cam_empty.rotation_euler[0] = math.radians(random.random()*90)
-            dist = 2 * random.random() + 0.3
+            cam_empty.rotation_euler[0] = math.radians(random.random()*80)
+            dist = 1.7 * random.random() + 0.5
             cam.location = (0, 1*dist*scale, 0.0)
             cam.data.lens = 20 + random.random()*20
             cam.data.sensor_width = 20 + random.random()*20
@@ -422,6 +425,8 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
         scene.render.filepath = render_file_path
         depth_file_output.file_slots[0].path = render_file_path + "_depth"
         ao_file_output.file_slots[0].path = render_file_path + "_ao"
+        id_file_output.file_slots[0].path = render_file_path + "_id"
+        normal_file_output.file_slots[0].path = render_file_path + "_normal"
         print("Render layers", render_layers.outputs.keys())
 
 
