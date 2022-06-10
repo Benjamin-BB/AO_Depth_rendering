@@ -288,12 +288,23 @@ random.seed(args.job_id)
 # Look at all HDRI maps
 hdri_files = []
 hdri_node = None
+hdri_mapping_node = None
 if args.hdri != "":
     world =  bpy.data.worlds['World']
     world.use_nodes = True
     hdri_files = glob(args.hdri + '/**/*.exr', recursive=True)
+    
+    # Create HDRI node (for env map)
     hdri_node = world.node_tree.nodes.new(type="ShaderNodeTexEnvironment")
     back_node = world.node_tree.nodes['Background']
+    # Create Mapping node (to generate transformation)
+    hdri_mapping_node = world.node_tree.nodes.new(type="ShaderNodeMapping")
+    world.node_tree.links.new(hdri_mapping_node.outputs["Vector"], hdri_node.inputs["Vector"])
+    # Create input texture coordinates
+    hdri_texcoords_node = world.node_tree.nodes.new(type="ShaderNodeTexCoord")
+    world.node_tree.links.new(hdri_texcoords_node.outputs["Generated"], hdri_mapping_node.inputs["Vector"])
+
+    # Final link and clean the default light
     world.node_tree.links.new(hdri_node.outputs['Color'], back_node.inputs['Color'])
     bpy.ops.object.delete({"selected_objects": [bpy.data.lights['Light']]})
 else:
@@ -375,12 +386,15 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
     
     # Make light just directional, disable shadows.
     if hdri_node:
+        # Change image
         image = random.sample(hdri_files, 1)[0]
         if hdri_node.image != None:
             hdri_node.image.user_clear()
             bpy.data.images.remove(hdri_node.image)
         print(f"Image: {image}")
         hdri_node.image = bpy.data.images.load(image)
+        # Change rotation
+        hdri_mapping_node.inputs["Rotation"].default_value[2] = math.radians(360*random.random())
     else:
         light = bpy.data.lights['Light']
         light.type = 'SUN'
@@ -428,11 +442,15 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
 
         if hdri_node:
             if(args.randlight):
+                # Change texture
+                # TODO: Evaluate if it does not have too much performance penality on the cluster
                 image = random.sample(hdri_files, 1)[0]
                 if hdri_node.image != None:
                     hdri_node.image.user_clear()
                     bpy.data.images.remove(hdri_node.image)
                 hdri_node.image = bpy.data.images.load(image)
+                # Change rotation
+                hdri_mapping_node.inputs["Rotation"].default_value[2] = math.radians(360*random.random())
         else:
             if(args.randlight):
                 bpy.data.objects['Sun'].rotation_euler[0] = math.radians(85*random.random())
