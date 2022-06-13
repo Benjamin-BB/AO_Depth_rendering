@@ -470,7 +470,10 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
 
         print("Rotation {}, {}".format((stepsize * i), math.radians(stepsize * i)))
 
-        render_file_path = fp + str(j) +'_r_{0:03d}'.format(int(i))
+        if args.num_job == args.job_id and args.num_job > 1:
+            render_file_path = fp + 'test' + os.path.sep + str(j) +'_r_{0:03d}'.format(int(i))
+        else:
+            render_file_path = fp + 'train' + os.path.sep + str(j) +'_r_{0:03d}'.format(int(i))
         print(f"Output: {render_file_path}")
         scene.render.filepath = render_file_path
         depth_file_output.file_slots[0].path = render_file_path + "_depth"
