@@ -340,6 +340,7 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
 
     # Add plane
     plane = create_plane(scale=1000)
+    plane.is_shadow_catcher = True
     if args.randmat:
         plane_material = bpy.data.materials.new(name="Plane BSDF")
         plane_material.use_nodes = True
