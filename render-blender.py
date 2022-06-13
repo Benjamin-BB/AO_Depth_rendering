@@ -445,7 +445,7 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
             if(args.randlight):
                 # Change texture
                 # TODO: Evaluate if it does not have too much performance penality on the cluster
-                image = random.sample(hdri_files, 1)[0]
+                image = random.choice(hdri_files)[0]
                 if hdri_node.image != None:
                     hdri_node.image.user_clear()
                     bpy.data.images.remove(hdri_node.image)
