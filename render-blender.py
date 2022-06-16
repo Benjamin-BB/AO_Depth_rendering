@@ -317,6 +317,7 @@ else:
 textures_lists = []
 if args.textures != "":
     print("Search textures...")
+    # Haven
     for f in glob(args.textures + '/**/*_nor_gl_4k.jpg', recursive=True):
         base = f.replace("_nor_gl_4k.jpg", "")
         names = [base + "_" + o +"_4k.jpg" for o in ["diff", "rough", "nor_gl"]]
@@ -324,6 +325,14 @@ if args.textures != "":
         if not is_missing:
             textures_lists += [tuple(names)]
     
+    # Textures.com
+    for f in glob(args.textures + '/**/*_1K_normal.tif', recursive=True):
+        base = f.replace("_1K_normal.tif", "")
+        names = [base + "_1K_" + o +".tif" for o in ["albedo", "roughness", "normal"]]
+        is_missing = False in [os.path.exists(o) for o in names]
+        if not is_missing:
+            textures_lists += [tuple(names)]
+
     for t in textures_lists:
         print(f" - {t[0]}")
 
