@@ -187,13 +187,13 @@ if args.format == 'OPEN_EXR':
 else:
     id_file_output.format.color_mode = 'BW'
     links.new(render_layers.outputs['IndexOB'], id_file_output.inputs[0])
-    # divide_node = nodes.new(type='CompositorNodeMath')
-    # divide_node.operation = 'DIVIDE'
-    # divide_node.use_clamp = False
-    # divide_node.inputs[1].default_value = 2**int(args.color_depth)
+    divide_node = nodes.new(type='CompositorNodeMath')
+    divide_node.operation = 'DIVIDE'
+    divide_node.use_clamp = False
+    divide_node.inputs[1].default_value = 2
 
-    # links.new(render_layers.outputs['IndexOB'], divide_node.inputs[0])
-    # links.new(divide_node.outputs[0], id_file_output.inputs[0])
+    links.new(render_layers.outputs['IndexOB'], divide_node.inputs[0])
+    links.new(divide_node.outputs[0], id_file_output.inputs[0])
 
 # Delete default cube
 try:
@@ -429,6 +429,8 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
         print(f" - {obj.name}")
         w = min(obj.bound_box[0][1]*scale, w)
    
+    plane.pass_index = 2
+
     # Translation de l'objet sur le plan (z=0) and scale
     obj = bpy.context.selected_objects[0]
     obj.pass_index = 1
