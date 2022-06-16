@@ -364,6 +364,7 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
 
     # Add plane
     plane = create_plane(scale=1000)
+    plane.pass_index = 2
     if args.randmat:
         plane_material = bpy.data.materials.new(name="Plane BSDF")
         plane_material.use_nodes = True
@@ -420,25 +421,35 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
             bpy.ops.object.modifier_apply(modifier="EdgeSplit")
 
     print(f"Number objects: {len(bpy.context.selected_objects)}")
-    w = 10000.0
     if args.randscale:
         scale = 0.1 + random.random()*10.0
     else:
         scale = args.scale
+    
+    if args.scale != 1:
+        bpy.ops.transform.resize(value=(args.scale,args.scale,args.scale))
+    
+    bpy.ops.object.transform_apply(scale=True)
+    min_x, min_y, min_z = 1000.0, 1000.0, 1000.0
+    max_x, max_y, max_z = -1000.0, -1000.0, -1000.0
     for obj in bpy.context.selected_objects[:1]:  
         print(f" - {obj.name}")
-        w = min(obj.bound_box[0][1]*scale, w)
-   
-    plane.pass_index = 2
+        for v in obj.bound_box:
+            min_x = min(v[0]*scale, min_x)
+            min_y = min(v[1]*scale, min_y)
+            min_z = min(v[2]*scale, min_z)
+            max_x = max(v[0]*scale, max_x)
+            max_y = max(v[1]*scale, max_y)
+            max_z = max(v[2]*scale, max_z)
 
     # Translation de l'objet sur le plan (z=0) and scale
     obj = bpy.context.selected_objects[0]
     obj.pass_index = 1
     context.view_layer.objects.active = obj
-    obj.location = [0, 0, -w]
-    if args.scale != 1:
-        bpy.ops.transform.resize(value=(args.scale,args.scale,args.scale))
-        bpy.ops.object.transform_apply(scale=True)
+    obj.location = [(max_x + min_x) * 0.5, (max_y + min_y) * 0.5, -min_z]
+
+    # Compute the size
+    radius = math.sqrt((max_x - min_x)**2 + (max_y - min_y)**2 + (max_z - min_z)**2)
     
     # Make light just directional, disable shadows.
     if hdri_node:
@@ -539,7 +550,7 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
         if(args.randcamera):
             cam_empty.rotation_euler[2] = math.radians(random.random()*360)
             cam_empty.rotation_euler[0] = math.radians(random.random()*80)
-            dist = 1.7 * random.random() + 0.5
+            dist = radius * 1.5 * random.random() + radius * 0.9
             cam.location = (0, 1*dist*scale, 0.0)
             cam.data.lens = 20 + random.random()*20
             cam.data.sensor_width = 20 + random.random()*20
