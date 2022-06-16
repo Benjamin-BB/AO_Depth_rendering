@@ -210,6 +210,14 @@ def create_texture_node(node_tree: bpy.types.NodeTree, path: str, is_color_data:
     # Return the node
     return texture_node
 
+def load_realistic_textures(node_tree: bpy.types.NodeTree,
+                            basename: str,
+                            uv_scaling: float):
+    node_tex_diff = create_texture_node(node_tree, basename + "_diff_4k.jpg", True)
+    node_tex_rough = create_texture_node(node_tree, basename + "_rough_4k.jpg", False)
+    node_tex_normalmap = create_texture_node(node_tree, basename + "_nor_gl_4k.jpg", False)
+    pass
+
 def set_principled_node(principled_node: bpy.types.Node,
                         base_color: Tuple[float, float, float, float] = (0.6, 0.6, 0.6, 1.0),
                         subsurface: float = 0.0,
