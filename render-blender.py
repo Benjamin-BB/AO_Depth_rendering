@@ -49,6 +49,8 @@ parser.add_argument("--randscale", action="store_true")
 parser.add_argument("--denoise", action="store_true")
 parser.add_argument("--cache", type=str, default="")
 parser.add_argument("--hdri", type=str, default="")
+parser.add_argument("--textures", type=str, default="")
+
 
 
 argv = sys.argv[sys.argv.index("--") + 1:]
@@ -210,14 +212,6 @@ def create_texture_node(node_tree: bpy.types.NodeTree, path: str, is_color_data:
     # Return the node
     return texture_node
 
-def load_realistic_textures(node_tree: bpy.types.NodeTree,
-                            basename: str,
-                            uv_scaling: float):
-    node_tex_diff = create_texture_node(node_tree, basename + "_diff_4k.jpg", True)
-    node_tex_rough = create_texture_node(node_tree, basename + "_rough_4k.jpg", False)
-    node_tex_normalmap = create_texture_node(node_tree, basename + "_nor_gl_4k.jpg", False)
-    pass
-
 def set_principled_node(principled_node: bpy.types.Node,
                         base_color: Tuple[float, float, float, float] = (0.6, 0.6, 0.6, 1.0),
                         subsurface: float = 0.0,
@@ -320,6 +314,19 @@ else:
     bpy.ops.object.light_add(type='SUN')
 
 
+textures_lists = []
+if args.textures != "":
+    print("Search textures...")
+    for f in glob(args.textures + '/**/*_nor_gl_4k.jpg', recursive=True):
+        base = f.replace("_nor_gl_4k.jpg", "")
+        names = [base + "_" + o +"_4k.jpg" for o in ["diff", "rough", "nor_gl"]]
+        is_missing = False in [os.path.exists(o) for o in names]
+        if not is_missing:
+            textures_lists += [tuple(names)]
+    
+    for t in textures_lists:
+        print(f" - {t[0]}")
+
 if args.cache != "":
     list_objects = open(args.cache, "r").readlines()
     list_objects = [v.strip() for v in list_objects]
@@ -351,8 +358,38 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
     if args.randmat:
         plane_material = bpy.data.materials.new(name="Plane BSDF")
         plane_material.use_nodes = True
-        random_material(plane_material)
+
+        # Create textures
+        files = random.sample(textures_lists, 1)[0]
+        node_tex_diff = create_texture_node(plane_material.node_tree, files[0], True)
+        node_tex_rough = create_texture_node(plane_material.node_tree, files[1], False)
+        node_tex_normalmap = create_texture_node(plane_material.node_tree, files[2], False)
+        node_normalmap = plane_material.node_tree.nodes.new(type="ShaderNodeNormalMap")
+        plane_material.node_tree.links.new(node_tex_normalmap.outputs["Color"], node_normalmap.inputs["Color"])
+
+        # Create input texture coordinates
+        plane_texcoords_node = plane_material.node_tree.nodes.new(type="ShaderNodeTexCoord")
+        
+        # Create Mapping node (to generate UV scaling)
+        plane_mapping_node = plane_material.node_tree.nodes.new(type="ShaderNodeMapping")
+        uv_size = 1000.0 * (0.5 + 3.0*random.random())
+        plane_mapping_node.inputs["Scale"].default_value[1] = uv_size
+        plane_mapping_node.inputs["Scale"].default_value[0] = uv_size
+        plane_mapping_node.inputs["Rotation"].default_value[2] = 360.0 * random.random()
+        plane_material.node_tree.links.new(plane_texcoords_node.outputs["Generated"], plane_mapping_node.inputs["Vector"])
+        plane_material.node_tree.links.new(plane_mapping_node.outputs["Vector"], node_tex_diff.inputs["Vector"])
+        plane_material.node_tree.links.new(plane_mapping_node.outputs["Vector"], node_tex_rough.inputs["Vector"])
+        plane_material.node_tree.links.new(plane_mapping_node.outputs["Vector"], node_tex_normalmap.inputs["Vector"])
+        
+        # Link to the prinpal BSDF
+        bsdf = plane_material.node_tree.nodes["Principled BSDF"]
+        plane_material.node_tree.links.new(node_normalmap.outputs["Normal"], bsdf.inputs["Normal"])
+        plane_material.node_tree.links.new(node_tex_rough.outputs["Color"], bsdf.inputs["Roughness"])
+        plane_material.node_tree.links.new(node_tex_diff.outputs["Color"], bsdf.inputs["Base Color"])
+        bsdf.inputs['Metallic'].default_value = 0.5
+
         plane.data.materials.append(plane_material)
+
     
     # Render object
     j = j+1
@@ -403,7 +440,7 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
         hdri_node.image = bpy.data.images.load(image)
         hdri_node.image.alpha_mode = 'NONE'
         # Change rotation
-        hdri_mapping_node.inputs["Rotation"].default_value[2] = math.radians(360*random.random())
+        hdri_mapping_node.inputs["Rotation"].default_value[2] = 360*random.random()
     else:
         light = bpy.data.lights['Light']
         light.type = 'SUN'
@@ -445,7 +482,27 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
 
     for i in range(0, args.views):
         if(args.randmat):
-            random_material(plane_material)
+            if args.textures:
+                uv_size = 1000.0 * (0.5 + 3.0*random.random())
+                plane_mapping_node.inputs["Scale"].default_value[1] = uv_size
+                plane_mapping_node.inputs["Scale"].default_value[0] = uv_size
+                plane_mapping_node.inputs["Location"].default_value[1] = 1000.0 * random.random()
+                plane_mapping_node.inputs["Location"].default_value[0] = 1000.0 * random.random()
+                plane_mapping_node.inputs["Rotation"].default_value[2] = 360 * random.random()
+
+                # Load other textures
+                files = random.sample(textures_lists, 1)[0]
+                nodes = [node_tex_diff, node_tex_rough, node_tex_normalmap]
+                for l, tex in enumerate(nodes):
+                    if tex.image != None:
+                        tex.image.user_clear()
+                        bpy.data.images.remove(tex.image)
+                    tex.image = bpy.data.images.load(files[l])
+                    tex.image.colorspace_settings.is_data = False if l != 0 else True
+            else:
+                random_material(plane_material)
+            
+            # Randomize materials
             for slot in obj.material_slots:
                 random_material(slot.material)
 
