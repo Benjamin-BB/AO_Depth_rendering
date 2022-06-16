@@ -47,7 +47,7 @@ parser.add_argument("--randlight", action="store_true")
 parser.add_argument("--randcamera", action="store_true")
 parser.add_argument("--randscale", action="store_true")
 parser.add_argument("--denoise", action="store_true")
-parser.add_argument("--cache", type=str, default="")
+parser.add_argument("--cache", action="store_true")
 parser.add_argument("--hdri", type=str, default="")
 parser.add_argument("--textures", type=str, default="")
 
@@ -336,8 +336,8 @@ if args.textures != "":
     for t in textures_lists:
         print(f" - {t[0]}")
 
-if args.cache != "":
-    list_objects = open(args.cache, "r").readlines()
+if args.cache:
+    list_objects = open(directory, "r").readlines()
     list_objects = [v.strip() for v in list_objects]
 else:
     if args.gltf:
