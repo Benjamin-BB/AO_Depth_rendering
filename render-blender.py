@@ -43,6 +43,7 @@ parser.add_argument('--sample', type=int, default=512,
                     help='number of samples for blender')
 parser.add_argument("--gltf", action="store_true")
 parser.add_argument("--randmat", action="store_true")
+parser.add_argument("--randmatobj", action="store_true")
 parser.add_argument("--randlight", action="store_true")
 parser.add_argument("--randcamera", action="store_true")
 parser.add_argument("--randscale", action="store_true")
@@ -295,7 +296,10 @@ if args.hdri != "":
     world =  bpy.data.worlds['World']
     world.use_nodes = True
     hdri_files = glob(args.hdri + '/**/*.exr', recursive=True)
-    
+    print("HDRI files: ")
+    for h in hdri_files:
+        print(f" - {h}")
+
     # Create HDRI node (for env map)
     hdri_node = world.node_tree.nodes.new(type="ShaderNodeTexEnvironment")
     back_node = world.node_tree.nodes['World Output']
@@ -369,35 +373,38 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
         plane_material = bpy.data.materials.new(name="Plane BSDF")
         plane_material.use_nodes = True
 
-        # Create textures
-        files = random.sample(textures_lists, 1)[0]
-        node_tex_diff = create_texture_node(plane_material.node_tree, files[0], True)
-        node_tex_rough = create_texture_node(plane_material.node_tree, files[1], False)
-        node_tex_normalmap = create_texture_node(plane_material.node_tree, files[2], False)
-        node_normalmap = plane_material.node_tree.nodes.new(type="ShaderNodeNormalMap")
-        plane_material.node_tree.links.new(node_tex_normalmap.outputs["Color"], node_normalmap.inputs["Color"])
+        if args.textures:
+            # Create textures
+            files = random.sample(textures_lists, 1)[0]
+            node_tex_diff = create_texture_node(plane_material.node_tree, files[0], True)
+            node_tex_rough = create_texture_node(plane_material.node_tree, files[1], False)
+            node_tex_normalmap = create_texture_node(plane_material.node_tree, files[2], False)
+            node_normalmap = plane_material.node_tree.nodes.new(type="ShaderNodeNormalMap")
+            plane_material.node_tree.links.new(node_tex_normalmap.outputs["Color"], node_normalmap.inputs["Color"])
 
-        # Create input texture coordinates
-        plane_texcoords_node = plane_material.node_tree.nodes.new(type="ShaderNodeTexCoord")
+            # Create input texture coordinates
+            plane_texcoords_node = plane_material.node_tree.nodes.new(type="ShaderNodeTexCoord")
+            
+            # Create Mapping node (to generate UV scaling)
+            plane_mapping_node = plane_material.node_tree.nodes.new(type="ShaderNodeMapping")
+            uv_size = 1000.0 * (0.5 + 3.0*random.random())
+            plane_mapping_node.inputs["Scale"].default_value[1] = uv_size
+            plane_mapping_node.inputs["Scale"].default_value[0] = uv_size
+            plane_mapping_node.inputs["Rotation"].default_value[2] = 360.0 * random.random()
+            plane_material.node_tree.links.new(plane_texcoords_node.outputs["Generated"], plane_mapping_node.inputs["Vector"])
+            plane_material.node_tree.links.new(plane_mapping_node.outputs["Vector"], node_tex_diff.inputs["Vector"])
+            plane_material.node_tree.links.new(plane_mapping_node.outputs["Vector"], node_tex_rough.inputs["Vector"])
+            plane_material.node_tree.links.new(plane_mapping_node.outputs["Vector"], node_tex_normalmap.inputs["Vector"])
+            
+            # Link to the prinpal BSDF
+            bsdf = plane_material.node_tree.nodes["Principled BSDF"]
+            plane_material.node_tree.links.new(node_normalmap.outputs["Normal"], bsdf.inputs["Normal"])
+            plane_material.node_tree.links.new(node_tex_rough.outputs["Color"], bsdf.inputs["Roughness"])
+            plane_material.node_tree.links.new(node_tex_diff.outputs["Color"], bsdf.inputs["Base Color"])
+            bsdf.inputs['Metallic'].default_value = 0.5
+        else:
+            random_material(plane_material)
         
-        # Create Mapping node (to generate UV scaling)
-        plane_mapping_node = plane_material.node_tree.nodes.new(type="ShaderNodeMapping")
-        uv_size = 1000.0 * (0.5 + 3.0*random.random())
-        plane_mapping_node.inputs["Scale"].default_value[1] = uv_size
-        plane_mapping_node.inputs["Scale"].default_value[0] = uv_size
-        plane_mapping_node.inputs["Rotation"].default_value[2] = 360.0 * random.random()
-        plane_material.node_tree.links.new(plane_texcoords_node.outputs["Generated"], plane_mapping_node.inputs["Vector"])
-        plane_material.node_tree.links.new(plane_mapping_node.outputs["Vector"], node_tex_diff.inputs["Vector"])
-        plane_material.node_tree.links.new(plane_mapping_node.outputs["Vector"], node_tex_rough.inputs["Vector"])
-        plane_material.node_tree.links.new(plane_mapping_node.outputs["Vector"], node_tex_normalmap.inputs["Vector"])
-        
-        # Link to the prinpal BSDF
-        bsdf = plane_material.node_tree.nodes["Principled BSDF"]
-        plane_material.node_tree.links.new(node_normalmap.outputs["Normal"], bsdf.inputs["Normal"])
-        plane_material.node_tree.links.new(node_tex_rough.outputs["Color"], bsdf.inputs["Roughness"])
-        plane_material.node_tree.links.new(node_tex_diff.outputs["Color"], bsdf.inputs["Base Color"])
-        bsdf.inputs['Metallic'].default_value = 0.5
-
         plane.data.materials.append(plane_material)
 
     
@@ -523,7 +530,8 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
                     tex.image.colorspace_settings.is_data = False if l != 0 else True
             else:
                 random_material(plane_material)
-            
+        
+        if args.randmatobj:
             # Randomize materials
             for slot in obj.material_slots:
                 random_material(slot.material)
