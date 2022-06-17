@@ -5,6 +5,8 @@ import bpy, bmesh
 from glob import glob
 import random
 
+import colorsys
+
 ## blender --background --python render_blender.py -- --output_folder /tmp path_to_model.obj ##
 #test
 
@@ -251,9 +253,14 @@ def set_principled_node(principled_node: bpy.types.Node,
     principled_node.inputs['Alpha'].default_value = alpha
 
 def random_material(mat):
+    n = mat.node_tree.nodes["Principled BSDF"]
+    b = n.inputs['Base Color'].default_value
+    hsv = colorsys.rgb_to_hsv(b[0], b[1], b[2])
+    print("HSV:", hsv)
+
     set_principled_node(mat.node_tree.nodes["Principled BSDF"], 
         base_color=(random.random(),random.random(),random.random(), 1.0),
-        metallic=random.random(),
+        metallic=min(1.0, -math.log(random.random())),
         roughness=random.random()
         )
 
@@ -435,18 +442,23 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
     for obj in bpy.context.selected_objects[:1]:  
         print(f" - {obj.name}")
         for v in obj.bound_box:
-            min_x = min(v[0]*scale, min_x)
-            min_y = min(v[1]*scale, min_y)
-            min_z = min(v[2]*scale, min_z)
-            max_x = max(v[0]*scale, max_x)
-            max_y = max(v[1]*scale, max_y)
-            max_z = max(v[2]*scale, max_z)
+            min_x = min(v[0], min_x)
+            min_y = min(v[1], min_y)
+            min_z = min(v[2], min_z)
+            max_x = max(v[0], max_x)
+            max_y = max(v[1], max_y)
+            max_z = max(v[2], max_z)
 
     # Translation de l'objet sur le plan (z=0) and scale
     obj = bpy.context.selected_objects[0]
     obj.pass_index = 1
     context.view_layer.objects.active = obj
     obj.location = [(max_x + min_x) * 0.5, (max_y + min_y) * 0.5, -min_z]
+
+    # Remove all materials with alpha non 1
+    for slot in obj.material_slots:
+        slot.material.node_tree.nodes["Principled BSDF"].inputs['Alpha'].default_value = 1.0
+
 
     # Compute the size
     radius = math.sqrt((max_x - min_x)**2 + (max_y - min_y)**2 + (max_z - min_z)**2)
@@ -521,6 +533,9 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
                         bpy.data.images.remove(tex.image)
                     tex.image = bpy.data.images.load(files[l])
                     tex.image.colorspace_settings.is_data = False if l != 0 else True
+                
+                bsdf = plane_material.node_tree.nodes["Principled BSDF"]
+                bsdf.inputs['Metallic'].default_value = min(1.0, -math.log(random.random()))
             else:
                 random_material(plane_material)
             
