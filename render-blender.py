@@ -253,17 +253,34 @@ def set_principled_node(principled_node: bpy.types.Node,
     principled_node.inputs['Transmission Roughness'].default_value = transmission_roughness
     principled_node.inputs['Alpha'].default_value = alpha
 
-def random_material(mat):
+def random_material(mat, pertub_metalic: bool, perturb_roughness: bool, use_hsv: bool = False):
     n = mat.node_tree.nodes["Principled BSDF"]
-    b = n.inputs['Base Color'].default_value
-    hsv = colorsys.rgb_to_hsv(b[0], b[1], b[2])
-    print("HSV:", hsv)
+    # Perturb the base color with HSV
+    # to only change the color not saturation or value
+    if use_hsv:
+        b = n.inputs['Base Color'].default_value
+        hsv = colorsys.rgb_to_hsv(b[0], b[1], b[2])
+        rgb = colorsys.hsv_to_rgb(random.random(), hsv[1], hsv[2])
+        base_color=(rgb[0], rgb[1], rgb[2], 1.0)
+    else:
+        base_color=(random.random(),random.random(),random.random(), 1.0)
+
+    if pertub_metalic:
+        metallic=min(1.0, -math.log(random.random()))
+    else:
+        metallic=n.inputs['Metallic'].default_value
+    
+    if perturb_roughness:
+        roughness=random.random()
+    else:
+        roughness=n.inputs['Roughness'].default_value
+
 
     set_principled_node(mat.node_tree.nodes["Principled BSDF"], 
-        base_color=(random.random(),random.random(),random.random(), 1.0),
-        metallic=min(1.0, -math.log(random.random())),
-        roughness=random.random()
-        )
+        base_color=base_color,
+        metallic=metallic,
+        roughness=roughness
+    )
 
 def create_plane(scale=1.0):
     """Create plane geometry"""
@@ -410,7 +427,7 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
             plane_material.node_tree.links.new(node_tex_diff.outputs["Color"], bsdf.inputs["Base Color"])
             bsdf.inputs['Metallic'].default_value = 0.5
         else:
-            random_material(plane_material)
+            random_material(plane_material, True, True)
         
         plane.data.materials.append(plane_material)
 
@@ -544,12 +561,12 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
                 bsdf = plane_material.node_tree.nodes["Principled BSDF"]
                 bsdf.inputs['Metallic'].default_value = min(1.0, -math.log(random.random()))
             else:
-                random_material(plane_material)
+                random_material(plane_material, True, True)
         
         if args.randmatobj:
             # Randomize materials
             for slot in obj.material_slots:
-                random_material(slot.material)
+                random_material(slot.material, False, False, True)
 
         if hdri_node:
             if(args.randlight):
