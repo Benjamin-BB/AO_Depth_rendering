@@ -5,6 +5,8 @@ import bpy, bmesh
 from glob import glob
 import random
 
+import colorsys
+
 ## blender --background --python render_blender.py -- --output_folder /tmp path_to_model.obj ##
 #test
 
@@ -43,12 +45,15 @@ parser.add_argument('--sample', type=int, default=512,
                     help='number of samples for blender')
 parser.add_argument("--gltf", action="store_true")
 parser.add_argument("--randmat", action="store_true")
+parser.add_argument("--randmatobj", action="store_true")
 parser.add_argument("--randlight", action="store_true")
 parser.add_argument("--randcamera", action="store_true")
 parser.add_argument("--randscale", action="store_true")
 parser.add_argument("--denoise", action="store_true")
-parser.add_argument("--cache", type=str, default="")
+parser.add_argument("--cache", action="store_true")
 parser.add_argument("--hdri", type=str, default="")
+parser.add_argument("--textures", type=str, default="")
+
 
 
 argv = sys.argv[sys.argv.index("--") + 1:]
@@ -185,13 +190,13 @@ if args.format == 'OPEN_EXR':
 else:
     id_file_output.format.color_mode = 'BW'
     links.new(render_layers.outputs['IndexOB'], id_file_output.inputs[0])
-    # divide_node = nodes.new(type='CompositorNodeMath')
-    # divide_node.operation = 'DIVIDE'
-    # divide_node.use_clamp = False
-    # divide_node.inputs[1].default_value = 2**int(args.color_depth)
+    divide_node = nodes.new(type='CompositorNodeMath')
+    divide_node.operation = 'DIVIDE'
+    divide_node.use_clamp = False
+    divide_node.inputs[1].default_value = 2
 
-    # links.new(render_layers.outputs['IndexOB'], divide_node.inputs[0])
-    # links.new(divide_node.outputs[0], id_file_output.inputs[0])
+    links.new(render_layers.outputs['IndexOB'], divide_node.inputs[0])
+    links.new(divide_node.outputs[0], id_file_output.inputs[0])
 
 # Delete default cube
 try:
@@ -248,12 +253,34 @@ def set_principled_node(principled_node: bpy.types.Node,
     principled_node.inputs['Transmission Roughness'].default_value = transmission_roughness
     principled_node.inputs['Alpha'].default_value = alpha
 
-def random_material(mat):
-    set_principled_node(mat.node_tree.nodes["Principled BSDF"], 
-        base_color=(random.random(),random.random(),random.random(), 1.0),
-        metallic=random.random(),
+def random_material(mat, pertub_metalic: bool, perturb_roughness: bool, use_hsv: bool = False):
+    n = mat.node_tree.nodes["Principled BSDF"]
+    # Perturb the base color with HSV
+    # to only change the color not saturation or value
+    if use_hsv:
+        b = n.inputs['Base Color'].default_value
+        hsv = colorsys.rgb_to_hsv(b[0], b[1], b[2])
+        rgb = colorsys.hsv_to_rgb(random.random(), hsv[1], hsv[2])
+        base_color=(rgb[0], rgb[1], rgb[2], 1.0)
+    else:
+        base_color=(random.random(),random.random(),random.random(), 1.0)
+
+    if pertub_metalic:
+        metallic=min(1.0, -math.log(random.random()))
+    else:
+        metallic=n.inputs['Metallic'].default_value
+    
+    if perturb_roughness:
         roughness=random.random()
-        )
+    else:
+        roughness=n.inputs['Roughness'].default_value
+
+
+    set_principled_node(mat.node_tree.nodes["Principled BSDF"], 
+        base_color=base_color,
+        metallic=metallic,
+        roughness=roughness
+    )
 
 def create_plane(scale=1.0):
     """Create plane geometry"""
@@ -293,7 +320,10 @@ if args.hdri != "":
     world =  bpy.data.worlds['World']
     world.use_nodes = True
     hdri_files = glob(args.hdri + '/**/*.exr', recursive=True)
-    
+    print("HDRI files: ")
+    for h in hdri_files:
+        print(f" - {h}")
+
     # Create HDRI node (for env map)
     hdri_node = world.node_tree.nodes.new(type="ShaderNodeTexEnvironment")
     back_node = world.node_tree.nodes['World Output']
@@ -312,8 +342,30 @@ else:
     bpy.ops.object.light_add(type='SUN')
 
 
-if args.cache != "":
-    list_objects = open(args.cache, "r").readlines()
+textures_lists = []
+if args.textures != "":
+    print("Search textures...")
+    # Haven
+    for f in glob(args.textures + '/**/*_nor_gl_4k.jpg', recursive=True):
+        base = f.replace("_nor_gl_4k.jpg", "")
+        names = [base + "_" + o +"_4k.jpg" for o in ["diff", "rough", "nor_gl"]]
+        is_missing = False in [os.path.exists(o) for o in names]
+        if not is_missing:
+            textures_lists += [tuple(names)]
+    
+    # Textures.com
+    for f in glob(args.textures + '/**/*_1K_normal.tif', recursive=True):
+        base = f.replace("_1K_normal.tif", "")
+        names = [base + "_1K_" + o +".tif" for o in ["albedo", "roughness", "normal"]]
+        is_missing = False in [os.path.exists(o) for o in names]
+        if not is_missing:
+            textures_lists += [tuple(names)]
+
+    for t in textures_lists:
+        print(f" - {t[0]}")
+
+if args.cache:
+    list_objects = open(directory, "r").readlines()
     list_objects = [v.strip() for v in list_objects]
 else:
     if args.gltf:
@@ -340,11 +392,45 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
 
     # Add plane
     plane = create_plane(scale=1000)
+    plane.pass_index = 2
     if args.randmat:
         plane_material = bpy.data.materials.new(name="Plane BSDF")
         plane_material.use_nodes = True
-        random_material(plane_material)
+
+        if args.textures:
+            # Create textures
+            files = random.sample(textures_lists, 1)[0]
+            node_tex_diff = create_texture_node(plane_material.node_tree, files[0], True)
+            node_tex_rough = create_texture_node(plane_material.node_tree, files[1], False)
+            node_tex_normalmap = create_texture_node(plane_material.node_tree, files[2], False)
+            node_normalmap = plane_material.node_tree.nodes.new(type="ShaderNodeNormalMap")
+            plane_material.node_tree.links.new(node_tex_normalmap.outputs["Color"], node_normalmap.inputs["Color"])
+
+            # Create input texture coordinates
+            plane_texcoords_node = plane_material.node_tree.nodes.new(type="ShaderNodeTexCoord")
+            
+            # Create Mapping node (to generate UV scaling)
+            plane_mapping_node = plane_material.node_tree.nodes.new(type="ShaderNodeMapping")
+            uv_size = 1000.0 * (0.5 + 3.0*random.random())
+            plane_mapping_node.inputs["Scale"].default_value[1] = uv_size
+            plane_mapping_node.inputs["Scale"].default_value[0] = uv_size
+            plane_mapping_node.inputs["Rotation"].default_value[2] = 360.0 * random.random()
+            plane_material.node_tree.links.new(plane_texcoords_node.outputs["Generated"], plane_mapping_node.inputs["Vector"])
+            plane_material.node_tree.links.new(plane_mapping_node.outputs["Vector"], node_tex_diff.inputs["Vector"])
+            plane_material.node_tree.links.new(plane_mapping_node.outputs["Vector"], node_tex_rough.inputs["Vector"])
+            plane_material.node_tree.links.new(plane_mapping_node.outputs["Vector"], node_tex_normalmap.inputs["Vector"])
+            
+            # Link to the prinpal BSDF
+            bsdf = plane_material.node_tree.nodes["Principled BSDF"]
+            plane_material.node_tree.links.new(node_normalmap.outputs["Normal"], bsdf.inputs["Normal"])
+            plane_material.node_tree.links.new(node_tex_rough.outputs["Color"], bsdf.inputs["Roughness"])
+            plane_material.node_tree.links.new(node_tex_diff.outputs["Color"], bsdf.inputs["Base Color"])
+            bsdf.inputs['Metallic'].default_value = 0.5
+        else:
+            random_material(plane_material, True, True)
+        
         plane.data.materials.append(plane_material)
+
     
     # Render object
     j = j+1
@@ -366,23 +452,40 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
             bpy.ops.object.modifier_apply(modifier="EdgeSplit")
 
     print(f"Number objects: {len(bpy.context.selected_objects)}")
-    w = 10000.0
     if args.randscale:
         scale = 0.1 + random.random()*10.0
     else:
         scale = args.scale
+    
+    if args.scale != 1:
+        bpy.ops.transform.resize(value=(args.scale,args.scale,args.scale))
+    
+    bpy.ops.object.transform_apply(scale=True)
+    min_x, min_y, min_z = 1000.0, 1000.0, 1000.0
+    max_x, max_y, max_z = -1000.0, -1000.0, -1000.0
     for obj in bpy.context.selected_objects[:1]:  
         print(f" - {obj.name}")
-        w = min(obj.bound_box[0][1]*scale, w)
-   
+        for v in obj.bound_box:
+            min_x = min(v[0], min_x)
+            min_y = min(v[1], min_y)
+            min_z = min(v[2], min_z)
+            max_x = max(v[0], max_x)
+            max_y = max(v[1], max_y)
+            max_z = max(v[2], max_z)
+
     # Translation de l'objet sur le plan (z=0) and scale
     obj = bpy.context.selected_objects[0]
     obj.pass_index = 1
     context.view_layer.objects.active = obj
-    obj.location = [0, 0, -w]
-    if args.scale != 1:
-        bpy.ops.transform.resize(value=(args.scale,args.scale,args.scale))
-        bpy.ops.object.transform_apply(scale=True)
+    obj.location = [(max_x + min_x) * 0.5, (max_y + min_y) * 0.5, -min_z]
+
+    # Remove all materials with alpha non 1
+    for slot in obj.material_slots:
+        slot.material.node_tree.nodes["Principled BSDF"].inputs['Alpha'].default_value = 1.0
+
+
+    # Compute the size
+    radius = math.sqrt((max_x - min_x)**2 + (max_y - min_y)**2 + (max_z - min_z)**2)
     
     # Make light just directional, disable shadows.
     if hdri_node:
@@ -395,7 +498,7 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
         hdri_node.image = bpy.data.images.load(image)
         hdri_node.image.alpha_mode = 'NONE'
         # Change rotation
-        hdri_mapping_node.inputs["Rotation"].default_value[2] = math.radians(360*random.random())
+        hdri_mapping_node.inputs["Rotation"].default_value[2] = 360*random.random()
     else:
         light = bpy.data.lights['Light']
         light.type = 'SUN'
@@ -437,9 +540,33 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
 
     for i in range(0, args.views):
         if(args.randmat):
-            random_material(plane_material)
+            if args.textures:
+                uv_size = 1000.0 * (0.5 + 3.0*random.random())
+                plane_mapping_node.inputs["Scale"].default_value[1] = uv_size
+                plane_mapping_node.inputs["Scale"].default_value[0] = uv_size
+                plane_mapping_node.inputs["Location"].default_value[1] = 1000.0 * random.random()
+                plane_mapping_node.inputs["Location"].default_value[0] = 1000.0 * random.random()
+                plane_mapping_node.inputs["Rotation"].default_value[2] = 360 * random.random()
+
+                # Load other textures
+                files = random.sample(textures_lists, 1)[0]
+                nodes = [node_tex_diff, node_tex_rough, node_tex_normalmap]
+                for l, tex in enumerate(nodes):
+                    if tex.image != None:
+                        tex.image.user_clear()
+                        bpy.data.images.remove(tex.image)
+                    tex.image = bpy.data.images.load(files[l])
+                    tex.image.colorspace_settings.is_data = False if l != 0 else True
+                
+                bsdf = plane_material.node_tree.nodes["Principled BSDF"]
+                bsdf.inputs['Metallic'].default_value = min(1.0, -math.log(random.random()))
+            else:
+                random_material(plane_material, True, True)
+        
+        if args.randmatobj:
+            # Randomize materials
             for slot in obj.material_slots:
-                random_material(slot.material)
+                random_material(slot.material, False, False, True)
 
         if hdri_node:
             if(args.randlight):
@@ -463,7 +590,7 @@ for p in range((args.job_id-1)*part, (args.job_id)*part):
         if(args.randcamera):
             cam_empty.rotation_euler[2] = math.radians(random.random()*360)
             cam_empty.rotation_euler[0] = math.radians(random.random()*80)
-            dist = 1.7 * random.random() + 0.5
+            dist = radius * 1.5 * random.random() + radius * 0.9
             cam.location = (0, 1*dist*scale, 0.0)
             cam.data.lens = 20 + random.random()*20
             cam.data.sensor_width = 20 + random.random()*20
