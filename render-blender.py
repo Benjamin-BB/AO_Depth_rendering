@@ -13,7 +13,7 @@ import colorsys
 parser = argparse.ArgumentParser(description='Renders given obj file by rotation a camera around it.')
 parser.add_argument('--views', type=int, default=30,
                     help='number of views to be rendered')
-parser.add_argument('obj', type=str,
+parser.add_argument('--obj', type=str,
                     help='Path to the folder with obj files to be rendered.')
 parser.add_argument('--output_folder', type=str, default='/tmp',
                     help='The path the output will be dumped to.')
@@ -50,7 +50,7 @@ parser.add_argument("--randlight", action="store_true")
 parser.add_argument("--randcamera", action="store_true")
 parser.add_argument("--randscale", action="store_true")
 parser.add_argument("--denoise", action="store_true")
-parser.add_argument("--cache", action="store_true")
+parser.add_argument("--cache", type=str, default="")
 parser.add_argument("--hdri", type=str, default="")
 parser.add_argument("--textures", type=str, default="")
 
@@ -364,8 +364,8 @@ if args.textures != "":
     for t in textures_lists:
         print(f" - {t[0]}")
 
-if args.cache:
-    list_objects = open(directory, "r").readlines()
+if args.cache != "":
+    list_objects = open(args.cache, "r").readlines()
     list_objects = [v.strip() for v in list_objects]
 else:
     if args.gltf:
